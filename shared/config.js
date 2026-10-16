@@ -1,0 +1,42 @@
+// Constants shared by the Node server and the browser client.
+// World units are pixels. The arena is COLS x ROWS tiles of TILE px,
+// drawn beneath a HUD_H px bar, for a 320x224 internal canvas.
+
+export const TILE = 16;
+export const COLS = 20;
+export const ROWS = 13;
+export const HUD_H = 16;
+
+export const TICK_HZ = 30;
+
+// Match flow (milliseconds)
+export const COUNTDOWN_MS = 8_000; // matchmaking window once the first human arrives
+export const MATCH_MS = 180_000;
+export const RESULTS_MS = 10_000;
+export const SCORE_LIMIT = 20;
+
+// Combat
+export const MAX_HP = 100;
+export const MOVE_SPEED = 62; // px per second
+export const RESPAWN_MS = 3_000;
+export const INVULN_MS = 1_500;
+export const FIRE_COOLDOWN_MS = 380;
+export const BULLET_SPEED = 180; // px per second
+export const BULLET_LIFE_MS = 1_100;
+export const BULLET_DAMAGE = 20;
+
+// Candy (health pickups)
+export const CANDY_HEAL = 30;
+export const CANDY_MAX = 4;
+export const CANDY_SPAWN_MS = 8_000;
+
+export const PLAYER_HALF = 5; // collision box half-size
+export const MAX_HUMANS_PER_ROOM = 10;
+
+// Teams double as costumes. Index = team id used everywhere.
+export const TEAMS = [
+  { name: 'Vampires', short: 'VAMP', color: 0xe63946 },
+  { name: 'Witches', short: 'WTCH', color: 0x3a7bd5 },
+  { name: 'Mummies', short: 'MUMY', color: 0x3ddc84 },
+  { name: 'Scarecrows', short: 'SCRW', color: 0xffd23f },
+];

@@ -1,0 +1,24 @@
+{
+  "name": "queens-tech-cloud-3lit3s",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Queens Tech: Cloud 3Lit3S - a Halloween 8-bit multiplayer arena brawl",
+  "type": "module",
+  "main": "server/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node test/smoke.js"
+  },
+  "dependencies": {
+    "express": "4.21.2",
+    "phaser": "3.80.1",
+    "socket.io": "4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "4.8.1"
+  }
+}

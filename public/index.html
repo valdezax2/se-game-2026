@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Queens Tech: Cloud 3Lit3S</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <main id="lobby">
+    <header>
+      <p class="school">Queens Tech</p>
+      <h1>Cloud 3Lit3S</h1>
+      <p class="tag">Halloween Arena Brawl · 8-bit · 2–4 teams</p>
+    </header>
+
+    <form id="join-form" class="name-row" onsubmit="return false">
+      <label for="name">Your name</label>
+      <input id="name" maxlength="12" placeholder="Trick-or-Treater" autocomplete="off">
+    </form>
+
+    <p id="error" role="alert"></p>
+
+    <section id="rooms" aria-live="polite" aria-label="Rooms"></section>
+
+    <footer>
+      <p>Move: Arrows / WASD · Fire: Space / J · Leave: Esc</p>
+      <p>Empty team slots are filled by CPU ghouls.</p>
+    </footer>
+  </main>
+
+  <div id="game" hidden></div>
+
+  <script src="/vendor/phaser/phaser.min.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
