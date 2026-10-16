@@ -91,12 +91,49 @@ const shade = (n, f) => {
   return hexOf((r << 16) | (g << 8) | b);
 };
 
-export function buildPixels(team) {
+export const teamPalette = (team) => {
   const color = TEAMS[team].color;
-  const c = { ...PAL, P: hexOf(color), S: shade(color, 0.6) };
+  return { ...PAL, P: hexOf(color), S: shade(color, 0.6) };
+};
+
+export function buildPixels(team) {
+  const c = teamPalette(team);
   const px = BODY.map((row) => [...row].map((ch) => (ch === '.' ? null : (c[ch] ?? null))));
   ATTIRE[team](px, c);
   return px;
+}
+
+const cloneGrid = (px) => px.map((row) => [...row]);
+
+// Moves the pixels in columns x0..x1-1, rows y0..y1-1 by dx (negative = left). Pixels pushed
+// off the 16px edge are dropped.
+function shiftBlock(px, x0, x1, y0, y1, dx) {
+  const out = cloneGrid(px);
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) out[y][x] = null;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) put(out, x + dx, y, px[y][x]);
+  return out;
+}
+
+// Poses for one team, all built from the same base sprite so they match the costume:
+// walkA / walkB are the two leg strides, blink closes the eyes, shoot leans back with an arm out.
+export function buildFrames(team) {
+  const c = teamPalette(team);
+  const base = buildPixels(team);
+
+  const walkA = shiftBlock(shiftBlock(base, 0, 8, 13, 16, -1), 8, 16, 13, 16, 1); // legs apart
+  const walkB = shiftBlock(shiftBlock(base, 0, 8, 13, 16, 1), 8, 16, 13, 16, -1); // legs together
+
+  const blink = cloneGrid(base);
+  for (let x = 0; x < 16; x++) if (blink[5][x] === c.E) blink[5][x] = c.T;
+
+  const shoot = shiftBlock(base, 0, 16, 0, 16, -1); // recoil
+  put(shoot, 13, 11, c.T); // arm
+  put(shoot, 14, 11, c.T);
+  put(shoot, 15, 10, c.A); // muzzle flash
+  put(shoot, 15, 11, c.W);
+  put(shoot, 15, 12, c.A);
+
+  return { base, walkA, walkB, blink, shoot };
 }
 
 // Seeded LCG so floor speckles are identical every run.
@@ -233,10 +270,13 @@ export function makeTextures(scene) {
     }
   });
 
+  // Per team: char<t>-base (standing), -walkA, -walkB, -blink, -shoot
   for (let t = 0; t < TEAMS.length; t++) {
-    paint(scene, `char${t}`, 16, 16, (ctx) => {
-      const px = buildPixels(t);
-      px.forEach((row, y) => row.forEach((col, x) => col && dot(ctx, x, y, col)));
-    });
+    const frames = buildFrames(t);
+    for (const [name, px] of Object.entries(frames)) {
+      paint(scene, `char${t}-${name}`, 16, 16, (ctx) => {
+        px.forEach((row, y) => row.forEach((col, x) => col && dot(ctx, x, y, col)));
+      });
+    }
   }
 }

@@ -1,6 +1,6 @@
 // Renders the character sheet from the same pixel data the game uses (sprites.js),
 // so the sheet cannot drift from the in-game sprites.
-import { buildPixels, BODY, PAL } from './sprites.js';
+import { buildPixels, buildFrames, BODY, PAL } from './sprites.js';
 import {
   TEAMS,
   TILE,
@@ -122,6 +122,33 @@ function renderStats() {
     .join('')}`;
 }
 
+// Each pose as it is drawn in a match, in the order the game uses them
+const POSES = [
+  ['base', 'Standing'],
+  ['blink', 'Blink'],
+  ['walkA', 'Walk 1'],
+  ['walkB', 'Walk 2'],
+  ['shoot', 'Shoot'],
+];
+
+function renderPoses() {
+  const host = document.getElementById('poses');
+  TEAMS.forEach((team, i) => {
+    const frames = buildFrames(i);
+    const row = document.createElement('div');
+    row.className = 'pose-row';
+    row.innerHTML = `<div class="name">${team.name}</div>`;
+    for (const [key, label] of POSES) {
+      const cell = document.createElement('figure');
+      cell.innerHTML = `<canvas width="16" height="16"></canvas><figcaption>${label}</figcaption>`;
+      row.appendChild(cell);
+      drawPixels(cell.querySelector('canvas'), frames[key], 4);
+    }
+    host.appendChild(row);
+  });
+}
+
 renderTeams();
 renderAnatomy();
+renderPoses();
 renderStats();

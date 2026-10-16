@@ -25,6 +25,7 @@ import {
   HOST_GRACE_MS,
   PRESENCE_MS,
   TICK_HZ,
+  SHOOT_ANIM_MS,
 } from '../shared/config.js';
 import {
   generateArena,
@@ -622,6 +623,7 @@ export class Room {
         rapid: a.rapidUntil > now,
         double: a.doubleUntil > now,
         inv: a.invulnUntil > now,
+        shooting: now - a.lastFire < SHOOT_ANIM_MS,
       })),
       bullets: this.bullets.map((b) => ({ x: Math.round(b.x), y: Math.round(b.y), team: b.team })),
       pickups: this.pickups.map((p) => ({ id: p.id, kind: p.kind, x: Math.round(p.x), y: Math.round(p.y) })),

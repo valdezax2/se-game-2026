@@ -49,6 +49,12 @@
     .legend dt { display: flex; align-items: center; gap: 8px; font-family: ui-monospace, Menlo, monospace; }
     .legend dt i { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; }
     .legend dd { margin: 0; color: var(--muted); }
+    .pose-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+    .pose-row:last-child { border-bottom: 0; }
+    .pose-row > .name { width: 90px; font-weight: 700; }
+    .pose-row figure { margin: 0; text-align: center; }
+    .pose-row canvas { image-rendering: pixelated; width: 64px; height: 64px; background: #0d0814; border-radius: 4px; display: block; }
+    .pose-row figcaption { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
     table { width: 100%; border-collapse: collapse; }
     td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
     th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
@@ -68,6 +74,9 @@
       <canvas id="body" width="16" height="16" style="width:256px;height:256px"></canvas>
       <dl class="legend" id="legend"></dl>
     </div>
+
+    <h2>Poses</h2>
+    <div class="card" id="poses"></div>
 
     <h2>Stats</h2>
     <div class="card">

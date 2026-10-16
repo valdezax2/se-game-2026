@@ -36,6 +36,7 @@ export const INVULN_MS = 1_500;
 export const FIRE_COOLDOWN_MS = 380;
 export const BULLET_SPEED = 180; // px per second
 export const BULLET_DAMAGE = 20;
+export const SHOOT_ANIM_MS = 160; // how long the shooting pose shows after a shot
 
 // Bullets stop after a set distance, measured in tiles from where they spawn.
 export const BULLET_RANGE_TILES = 4;

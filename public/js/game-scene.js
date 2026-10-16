@@ -6,6 +6,10 @@ const WALL = 1;
 const CRATE = 2;
 const LERP = 0.35;
 const SHOT_SFX_MS = 380;
+const WALK_FRAME_MS = 110; // time per walk pose
+const WALK_CYCLE = ['walkA', 'base', 'walkB', 'base'];
+const BLINK_EVERY_MS = 3200; // standing players blink at this interval...
+const BLINK_MS = 140; // ...for this long
 const MAX_HP = 100;
 
 // Set by main.js before the Phaser game boots.
@@ -192,7 +196,7 @@ export class GameScene extends Phaser.Scene {
   makeActorView(a) {
     const root = this.add.container(0, 0).setDepth(10);
     const gun = this.add.graphics();
-    const sprite = this.add.image(0, 0, `char${a.team}`);
+    const sprite = this.add.image(0, 0, `char${a.team}-base`);
     const hp = this.add.graphics();
     const tag = this.add
       .text(0, -12, a.name, {
@@ -204,7 +208,7 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 1);
     root.add([gun, sprite, hp, tag]);
-    return { root, sprite, gun, hp, a, moving: false };
+    return { root, sprite, gun, hp, a, moving: false, frame: 'base' };
   }
 
   makePickup(p) {
@@ -254,7 +258,17 @@ export class GameScene extends Phaser.Scene {
     v.root.visible = a.alive;
     v.root.alpha = a.inv && Math.floor(time / 100) % 2 ? 0.4 : 1;
     v.sprite.setFlipX(a.ax < 0);
-    v.sprite.y = v.moving ? Math.round(Math.sin(time / 60)) : 0;
+    v.sprite.y = v.moving && !a.shooting ? Math.round(Math.sin(time / 60)) : 0;
+
+    // Pose: shooting beats walking, walking beats standing. Standing blinks now and then.
+    let frame = 'base';
+    if (a.shooting) frame = 'shoot';
+    else if (v.moving) frame = WALK_CYCLE[Math.floor(time / WALK_FRAME_MS) % WALK_CYCLE.length];
+    else if (time % BLINK_EVERY_MS < BLINK_MS) frame = 'blink';
+    if (frame !== v.frame) {
+      v.frame = frame;
+      v.sprite.setTexture(`char${a.team}-${frame}`);
+    }
 
     v.gun.clear();
     if (a.alive) {
