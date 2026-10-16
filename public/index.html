@@ -9,29 +9,128 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <main id="lobby">
-    <header>
-      <p class="school">Queens Tech</p>
-      <h1>Cloud 3Lit3S</h1>
-      <p class="tag">Halloween Arena Brawl · 8-bit · 2–4 teams</p>
-    </header>
+  <header class="site-head">
+    <p class="school">Queens Tech</p>
+    <h1>Cloud 3Lit3S</h1>
+    <p class="tag">Halloween Arena Brawl · 8-bit · 2–8 players, CPUs included</p>
+  </header>
 
-    <form id="join-form" class="name-row" onsubmit="return false">
-      <label for="name">Your name</label>
-      <input id="name" maxlength="12" placeholder="Trick-or-Treater" autocomplete="off">
-    </form>
+  <!-- Sign in / create account -->
+  <main id="auth" class="wrap" hidden>
+    <section class="card">
+      <div class="tabs" role="tablist">
+        <button type="button" id="tab-login" role="tab" aria-selected="true">Log in</button>
+        <button type="button" id="tab-register" role="tab" aria-selected="false">Create account</button>
+      </div>
 
-    <p id="error" role="alert"></p>
+      <form id="login-form" class="stack">
+        <label>Email <input name="email" type="email" required autocomplete="email"></label>
+        <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+        <button type="submit">Log in</button>
+      </form>
 
-    <section id="rooms" aria-live="polite" aria-label="Rooms"></section>
+      <form id="register-form" class="stack" hidden>
+        <div class="row">
+          <label>First name <input name="firstName" required maxlength="40" autocomplete="given-name"></label>
+          <label>Last name <input name="lastName" required maxlength="40" autocomplete="family-name"></label>
+        </div>
+        <label>Phone <input name="phone" type="tel" required autocomplete="tel"></label>
+        <label>Email <input name="email" type="email" required autocomplete="email"></label>
+        <div class="row">
+          <label>Zip code <input name="zip" required maxlength="10" inputmode="numeric" autocomplete="postal-code"></label>
+          <label>Date of birth <input name="dob" type="date" required autocomplete="bday"></label>
+        </div>
+        <label>Password <input name="password" type="password" required minlength="8" autocomplete="new-password"></label>
+        <p class="hint">Your phone, email, zip and date of birth stay private. Other players see only your first name and last initial.</p>
+        <button type="submit">Create account</button>
+      </form>
+      <p id="auth-error" class="error" role="alert"></p>
+    </section>
+  </main>
 
-    <footer>
-      <p>Move: Arrows / WASD · Fire: Space / J · Leave: Esc</p>
-      <p>Empty team slots are filled by CPU ghouls.</p>
-    </footer>
+  <!-- Lobby: rooms, create, leaderboard -->
+  <main id="lobby" class="wrap" hidden>
+    <div class="bar">
+      <p id="whoami"></p>
+      <button type="button" id="logout" class="ghost">Log out</button>
+    </div>
+
+    <section class="card">
+      <h2>Create a room</h2>
+      <form id="create-form" class="grid">
+        <label class="wide">Room name <input name="name" required maxlength="24" placeholder="Graveyard Showdown"></label>
+        <label>Total players <input name="totalSlots" type="number" min="2" max="8" value="4" required>
+          <span class="hint">Humans + CPUs</span></label>
+        <label>Human slots <input name="humanSlots" type="number" min="1" max="8" placeholder="same as total">
+          <span class="hint">Leave blank for all human</span></label>
+        <label>CPU difficulty
+          <select name="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium" selected>Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+        </label>
+        <label>Visibility
+          <select name="visibility" id="visibility">
+            <option value="public" selected>Public</option>
+            <option value="private">Password protected</option>
+          </select>
+        </label>
+        <label id="create-password-wrap" class="wide" hidden>Room password <input name="password" type="password" minlength="4" maxlength="32" autocomplete="new-password"></label>
+        <div class="wide">
+          <button type="submit">Create room</button>
+          <span id="create-error" class="error" role="alert"></span>
+        </div>
+      </form>
+    </section>
+
+    <p id="lobby-error" class="error" role="alert"></p>
+    <section id="rooms" class="rooms" aria-live="polite" aria-label="Rooms"></section>
+
+    <section class="card">
+      <h2>Top killers</h2>
+      <ol id="leaders" class="board"></ol>
+    </section>
+  </main>
+
+  <!-- Room: waiting, results, host controls -->
+  <main id="room" class="wrap" hidden>
+    <section class="card">
+      <h2 id="room-title"></h2>
+      <p id="room-meta" class="meta"></p>
+      <p id="slots" class="meta"></p>
+      <ul id="players" class="players"></ul>
+      <p id="host-note" class="hint"></p>
+    </section>
+
+    <section class="card">
+      <h3>Host controls</h3>
+      <div class="row">
+        <button type="button" id="btn-start">Start match</button>
+        <button type="button" id="btn-reload" class="ghost">Reload match</button>
+        <button type="button" id="btn-leave" class="ghost">Leave room</button>
+      </div>
+      <p id="room-status" class="meta"></p>
+      <p id="room-error" class="error" role="alert"></p>
+    </section>
+
+    <section id="results-card" class="card" hidden>
+      <h3>Last match</h3>
+      <div id="results"></div>
+    </section>
+
+    <section class="card">
+      <h3>Controls</h3>
+      <p class="meta">Move: Arrow keys or WASD · Fire: Space or J · Scoreboard: hold Tab · Leave: Esc</p>
+    </section>
   </main>
 
   <div id="game" hidden></div>
+  <div id="game-bar" hidden>
+    <button type="button" id="bar-reload" class="ghost">Reload (host)</button>
+    <button type="button" id="bar-leave" class="ghost">Leave</button>
+    <span id="bar-error" class="error" role="alert"></span>
+  </div>
 
   <script src="/vendor/phaser/phaser.min.js"></script>
   <script src="/socket.io/socket.io.js"></script>

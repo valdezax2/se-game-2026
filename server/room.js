@@ -22,7 +22,8 @@ import {
   SCORE_LIMIT,
   COUNTDOWN_MS,
   RESULTS_MS,
-  MAX_HUMANS_PER_ROOM,
+  HOST_GRACE_MS,
+  PRESENCE_MS,
   TICK_HZ,
 } from '../shared/config.js';
 import {
@@ -35,9 +36,10 @@ import {
   FLOOR,
   CRATE,
 } from './arena.js';
-import { MediumBot } from './bot.js';
+import { CpuBot } from './bot.js';
+import { checkSecret } from './security.js';
 
-const BOT_NAMES = ['CPU Gus', 'CPU Boo', 'CPU Crumb', 'CPU Skelly', 'CPU Pete', 'CPU Lantern', 'CPU Cobweb', 'CPU Moth'];
+const CPU_NAMES = ['CPU Gus', 'CPU Boo', 'CPU Crumb', 'CPU Skelly', 'CPU Pete', 'CPU Lantern', 'CPU Cobweb', 'CPU Moth'];
 const PICKUP_RADIUS = 10;
 const HIT_RADIUS = 8;
 const FEED_MAX = 4;
@@ -45,6 +47,9 @@ const CRATE_CANDY_CHANCE = 0.35;
 
 let idSeq = 1;
 const nextId = () => idSeq++;
+
+const teamCountFor = (totalSlots) => clamp(totalSlots, 2, 4);
+const fail = (error) => ({ ok: false, error });
 
 function shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -72,7 +77,7 @@ export function bulletRangeFor(a) {
   return tiles * TILE;
 }
 
-// Humans and bots share this shape; humans keep their record across matches.
+// Humans and CPUs share this shape. Humans keep their record while they stay in the room.
 function makeActor(fields) {
   return {
     team: -1,
@@ -97,20 +102,27 @@ function makeActor(fields) {
   };
 }
 
-// One authoritative match room. Lifecycle:
-//   waiting -> starting (countdown) -> playing -> results -> waiting
+// One room. Lifecycle: waiting -> starting (countdown) -> playing -> results -> waiting.
+// Nothing auto-starts: the host decides when a match begins.
 export class Room {
-  constructor(io, def) {
+  constructor(io, cfg, hooks = {}) {
     this.io = io;
-    this.id = def.id;
-    this.name = def.name;
-    this.theme = def.theme;
-    this.seed = def.seed;
-    this.crateChance = def.crateChance;
-    this.channel = `room:${def.id}`;
+    this.id = cfg.id;
+    this.name = cfg.name;
+    this.visibility = cfg.visibility;
+    this.passwordHash = cfg.passwordHash ?? null;
+    this.totalSlots = cfg.totalSlots; // humans + CPUs
+    this.humanSlots = cfg.humanSlots; // max humans; the rest of the total are CPUs
+    this.difficulty = cfg.difficulty;
+    this.seed = cfg.seed ?? Math.floor(Math.random() * 1e9);
+    this.crateChance = cfg.crateChance ?? 0.25;
+    this.hooks = hooks;
+    this.clock = () => Date.now();
+    this.channel = `room:${this.id}`;
 
-    this.humans = new Map(); // socket id -> human actor (lobby and in-match)
-    this.actors = []; // humans + bots taking part in the current match
+    this.hostId = null;
+    this.humans = new Map(); // user id -> human actor (lobby and in-match)
+    this.actors = []; // humans + CPUs taking part in the current match
     this.bullets = [];
     this.pickups = [];
     this.feed = [];
@@ -118,102 +130,175 @@ export class Room {
     this.teamCount = 2;
     this.map = null;
     this.matchNo = 0;
-    this.botSeq = 0;
+    this.cpuSeq = 0;
     this.phase = 'waiting';
     this.phaseEnd = 0;
     this.lastCandy = 0;
     this.result = null;
-    this.lastTick = Date.now();
+    this.lastTick = this.clock();
+    this.lastPhase = 'waiting';
 
     this.timer = setInterval(() => this.tick(), 1000 / TICK_HZ);
+  }
+
+  destroy() {
+    clearInterval(this.timer);
+  }
+
+  hostName() {
+    return this.humans.get(this.hostId)?.name ?? null;
   }
 
   summary() {
     return {
       id: this.id,
       name: this.name,
-      theme: this.theme,
+      visibility: this.visibility,
+      locked: this.visibility === 'private',
       phase: this.phase,
       humans: this.humans.size,
-      bots: this.actors.filter((a) => a.bot).length,
-      full: this.humans.size >= MAX_HUMANS_PER_ROOM,
+      humanSlots: this.humanSlots,
+      totalSlots: this.totalSlots,
+      difficulty: this.difficulty,
+      host: this.hostName(),
     };
   }
 
-  join(socket, name) {
-    if (this.humans.size >= MAX_HUMANS_PER_ROOM) return { ok: false, error: 'That room is full.' };
+  state(now = this.clock()) {
+    const inMatch = new Set(this.actors.filter((a) => !a.bot).map((a) => a.id));
+    const planning = this.phase === 'waiting' || this.phase === 'starting';
+    return {
+      id: this.id,
+      name: this.name,
+      visibility: this.visibility,
+      phase: this.phase,
+      left: Math.max(0, this.phaseEnd - now),
+      hostId: this.hostId,
+      totalSlots: this.totalSlots,
+      humanSlots: this.humanSlots,
+      difficulty: this.difficulty,
+      teams: teamCountFor(this.totalSlots),
+      cpuCount: planning ? Math.max(0, this.totalSlots - this.humans.size) : this.actors.filter((a) => a.bot).length,
+      humans: [...this.humans.values()].map((h) => ({
+        id: h.id,
+        name: h.name,
+        connected: h.connected,
+        inMatch: inMatch.has(h.id),
+      })),
+      result: this.result,
+    };
+  }
 
-    this.humans.set(socket.id, makeActor({ id: socket.id, name, bot: false, socket }));
-    socket.join(this.channel);
+  emitState() {
+    this.io.to(this.channel).emit('room:state', this.state());
+  }
 
-    if (this.phase === 'waiting') {
-      this.phase = 'starting';
-      this.phaseEnd = Date.now() + COUNTDOWN_MS;
+  // Joins a user. The first user to join becomes host. `owner` skips the password check (room creator).
+  join(user, password = '', { owner = false } = {}) {
+    if (this.humans.has(user.id)) {
+      this.reattach(user.id, user.socket);
+      return this.joinResult();
     }
-    // Returned in the ack so the client has the map before its listeners attach.
-    // Late joiners spectate until the next match.
+    if (!owner && this.passwordHash && !checkSecret(String(password), this.passwordHash)) {
+      return fail('Wrong room password.');
+    }
+    if (this.humans.size >= this.humanSlots) return fail('That room is full.');
+
+    this.humans.set(
+      user.id,
+      makeActor({ id: user.id, name: user.name, bot: false, socket: user.socket, connected: true, disconnectedAt: 0 }),
+    );
+    this.hostId ??= user.id;
+    user.socket.join(this.channel);
+    this.emitState();
+    return this.joinResult();
+  }
+
+  joinResult() {
     return {
       ok: true,
+      roomId: this.id,
       roomName: this.name,
-      theme: this.theme,
+      phase: this.phase,
       map: this.map ? this.mapPayload() : null,
+      state: this.state(),
     };
   }
 
-  leave(socket) {
-    const human = this.humans.get(socket.id);
-    if (!human) return;
-    this.humans.delete(socket.id);
-    this.actors = this.actors.filter((a) => a !== human);
-    socket.leave(this.channel);
+  // Reconnect within the grace window: same player, new socket.
+  reattach(userId, socket) {
+    const h = this.humans.get(userId);
+    if (!h) return false;
+    h.socket = socket;
+    h.connected = true;
+    h.disconnectedAt = 0;
+    socket.join(this.channel);
+    this.emitState();
+    return true;
   }
 
-  setInput(id, { dx = 0, dy = 0, fire = false } = {}) {
-    const human = this.humans.get(id);
+  // Socket dropped. The player keeps their place until PRESENCE_MS passes.
+  disconnect(userId, socket) {
+    const h = this.humans.get(userId);
+    if (!h || h.socket !== socket) return; // already reconnected on another socket
+    h.connected = false;
+    h.socket = null;
+    h.disconnectedAt = this.clock();
+    h.dx = 0;
+    h.dy = 0;
+    h.fire = false;
+    this.emitState();
+  }
+
+  // Explicit leave: removed immediately.
+  leave(userId) {
+    const h = this.humans.get(userId);
+    if (!h) return false;
+    this.humans.delete(userId);
+    this.actors = this.actors.filter((a) => a !== h);
+    if (this.hostId === userId) this.transferHost();
+    this.emitState();
+    return true;
+  }
+
+  // Host passes to the earliest-joined connected player.
+  transferHost() {
+    const next = [...this.humans.values()].find((h) => h.id !== this.hostId && h.connected);
+    if (!next) return false;
+    this.hostId = next.id;
+    this.emitState();
+    return true;
+  }
+
+  setInput(userId, { dx = 0, dy = 0, fire = false } = {}) {
+    const human = this.humans.get(userId);
     if (!human) return;
     human.dx = clamp(Number(dx) || 0, -1, 1);
     human.dy = clamp(Number(dy) || 0, -1, 1);
     human.fire = Boolean(fire);
   }
 
-  tick() {
-    const now = Date.now();
-    const dtMs = Math.min(100, now - this.lastTick);
-    this.lastTick = now;
-
-    if (this.humans.size === 0 && this.phase !== 'waiting') this.reset();
-
-    switch (this.phase) {
-      case 'starting':
-        if (now >= this.phaseEnd) this.startMatch(now);
-        break;
-      case 'playing': {
-        this.step(now, dtMs);
-        // The match is over when no human can still act: all are out of lives.
-        const humanCanAct = this.actors.some((a) => !a.bot && (a.alive || !a.out));
-        if (!humanCanAct || now >= this.phaseEnd || Math.max(...this.scores) >= SCORE_LIMIT) {
-          this.endMatch(now);
-        }
-        break;
-      }
-      case 'results':
-        if (now >= this.phaseEnd) {
-          this.reset();
-          if (this.humans.size) {
-            this.phase = 'starting';
-            this.phaseEnd = now + COUNTDOWN_MS;
-          }
-        }
-        break;
-      default:
-        break;
-    }
-
-    if (this.humans.size) this.broadcast(now);
+  start(userId) {
+    if (userId !== this.hostId) return fail('Only the host can start the match.');
+    if (this.phase !== 'waiting') return fail('A match is already running. Use Reload to restart it.');
+    this.phase = 'starting';
+    this.phaseEnd = this.clock() + COUNTDOWN_MS;
+    this.emitState();
+    return { ok: true };
   }
 
-  reset() {
-    this.phase = 'waiting';
+  // Restarts the round with a new map and zeroed scores. Reloads are not recorded.
+  reload(userId) {
+    if (userId !== this.hostId) return fail('Only the host can reload the match.');
+    this.closeRound();
+    this.result = null;
+    this.phase = 'starting';
+    this.phaseEnd = this.clock() + COUNTDOWN_MS;
+    this.emitState();
+    return { ok: true };
+  }
+
+  closeRound() {
     this.actors = [];
     this.bullets = [];
     this.pickups = [];
@@ -225,10 +310,55 @@ export class Room {
     }
   }
 
+  tick() {
+    const now = this.clock();
+    const dtMs = Math.min(100, now - this.lastTick);
+    this.lastTick = now;
+
+    this.checkPresence(now);
+
+    switch (this.phase) {
+      case 'starting':
+        if (now >= this.phaseEnd) this.startMatch(now);
+        break;
+      case 'playing': {
+        this.step(now, dtMs);
+        // Over when time runs out, a team hits the score limit, or no human can still act.
+        const humanCanAct = this.actors.some((a) => !a.bot && (a.alive || !a.out));
+        if (!humanCanAct || now >= this.phaseEnd || Math.max(...this.scores) >= SCORE_LIMIT) {
+          this.endMatch(now);
+        }
+        break;
+      }
+      case 'results':
+        if (now >= this.phaseEnd) {
+          this.closeRound();
+          this.phase = 'waiting';
+        }
+        break;
+      default:
+        break;
+    }
+
+    if (this.phase !== this.lastPhase) {
+      this.lastPhase = this.phase;
+      this.emitState();
+    }
+    if (this.humans.size) this.broadcast(now);
+  }
+
+  checkPresence(now) {
+    const host = this.humans.get(this.hostId);
+    if (host && !host.connected && now - host.disconnectedAt >= HOST_GRACE_MS) this.transferHost();
+    for (const h of [...this.humans.values()]) {
+      if (!h.connected && now - h.disconnectedAt >= PRESENCE_MS) this.leave(h.id);
+    }
+  }
+
   startMatch(now) {
     const humans = shuffle([...this.humans.values()]);
-    this.teamCount = clamp(humans.length, 2, 4);
-    const target = Math.ceil(humans.length / this.teamCount);
+    const cpuCount = Math.max(0, this.totalSlots - humans.length);
+    this.teamCount = teamCountFor(this.totalSlots);
 
     this.map = generateArena(this.seed + this.matchNo * 7919, this.crateChance);
     this.matchNo += 1;
@@ -239,36 +369,28 @@ export class Room {
     this.scores = [0, 0, 0, 0];
     this.lastCandy = now;
 
-    // Round-robin assignment keeps team sizes within one of each other.
-    const sizes = Array(this.teamCount).fill(0);
-    humans.forEach((h, i) => {
-      h.team = i % this.teamCount;
-      sizes[h.team] += 1;
-    });
-    this.actors = [...humans];
-
-    // AI backfill: every team is topped up to the target size with medium bots.
-    for (let team = 0; team < this.teamCount; team++) {
-      for (let n = sizes[team]; n < target; n++) this.actors.push(this.spawnBot(team));
-    }
-
-    for (const a of this.actors) {
+    const cpus = Array.from({ length: cpuCount }, () => this.spawnCpu());
+    this.actors = [...humans, ...cpus];
+    // Round-robin over everyone keeps team sizes within one of each other.
+    this.actors.forEach((a, i) => {
+      a.team = i % this.teamCount;
       a.kills = 0;
       a.deaths = 0;
       a.out = false;
       this.place(a, now);
-    }
+    });
 
     this.phase = 'playing';
     this.phaseEnd = now + MATCH_MS;
     this.io.to(this.channel).emit('map', this.mapPayload());
     this.io.to(this.channel).emit('fx', { type: 'start' });
+    this.emitState();
   }
 
-  spawnBot(team) {
-    this.botSeq += 1;
-    const name = BOT_NAMES[(this.botSeq - 1) % BOT_NAMES.length];
-    return makeActor({ id: `bot-${this.botSeq}`, name, bot: true, team, ai: new MediumBot() });
+  spawnCpu() {
+    this.cpuSeq += 1;
+    const name = CPU_NAMES[(this.cpuSeq - 1) % CPU_NAMES.length];
+    return makeActor({ id: `cpu-${this.cpuSeq}`, name, bot: true, ai: new CpuBot(this.difficulty) });
   }
 
   // Spawn or respawn. Power-ups are lost on death.
@@ -439,6 +561,7 @@ export class Room {
         .map((a) => ({ name: a.name, team: a.team, kills: a.kills, deaths: a.deaths, bot: a.bot }))
         .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths),
     };
+    this.hooks.onMatchEnd?.(this.actors.filter((a) => !a.bot), this.result);
     this.io.to(this.channel).emit('match:end', this.result);
   }
 

@@ -21,7 +21,7 @@ export class GameScene extends Phaser.Scene {
 
   create() {
     this.net = session.net;
-    this.myId = this.net.socket.id;
+    this.myId = this.net.userId;
     makeTextures(this);
 
     this.mapNo = -1;
@@ -47,6 +47,7 @@ export class GameScene extends Phaser.Scene {
       fire: 'SPACE',
       fire2: 'J',
       leave: 'ESC',
+      tab: 'TAB',
     });
 
     this.handlers = {
@@ -90,6 +91,13 @@ export class GameScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(200);
+
+    // Kill scoreboard, shown while Tab is held
+    this.scoreBg = this.add.rectangle(24, HUD_H + 8, 272, 120, 0x0b0712, 0.94).setOrigin(0).setDepth(150).setVisible(false);
+    this.scoreText = this.add
+      .text(32, HUD_H + 14, '', { fontFamily: 'monospace', fontSize: '8px', color: '#ffffff', lineSpacing: 3 })
+      .setDepth(151)
+      .setVisible(false);
   }
 
   sendInput() {
@@ -125,6 +133,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   applySnapshot(s) {
+    this.snap = s;
     // Crates shot since last snapshot
     const standing = new Set(s.crates);
     for (const [idx, view] of this.crateViews) {
@@ -215,6 +224,23 @@ export class GameScene extends Phaser.Scene {
       return;
     }
     for (const v of this.actorViews.values()) this.renderActor(v, time);
+
+    const showBoard = this.keys.tab.isDown && Boolean(this.snap);
+    this.scoreBg.setVisible(showBoard);
+    this.scoreText.setVisible(showBoard);
+    if (showBoard) this.scoreText.setText(this.scoreboardText());
+  }
+
+  scoreboardText() {
+    const rows = [...this.snap.actors]
+      .sort((a, b) => b.kills - a.kills || a.deaths - b.deaths)
+      .slice(0, 8)
+      .map((a, i) => {
+        const name = a.name.slice(0, 12).padEnd(12);
+        const out = a.out ? ' OUT' : '';
+        return `${String(i + 1).padStart(2)}. ${name} ${TEAMS[a.team].short} K${String(a.kills).padStart(2)} D${a.deaths}${out}`;
+      });
+    return ['SCOREBOARD (kills)', ...rows].join('\n');
   }
 
   renderActor(v, time) {

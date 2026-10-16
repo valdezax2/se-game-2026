@@ -1,12 +1,38 @@
 import { TILE, MAX_HP } from '../shared/config.js';
 import { findPath, hasLineOfSight, randomFloorTile, SPAWN_CORNERS } from './arena.js';
 
-// "Medium" difficulty tuning
-const SIGHT_RANGE = 170; // px
-const ATTACK_RANGE = 120; // px: stop and shoot inside this
+// CPU difficulty profiles
+export const PROFILES = {
+  easy: {
+    reaction: [450, 650], // ms before engaging a newly spotted enemy
+    accuracy: [0.4, 0.5],
+    missAngle: [0.5, 0.7], // radians the aim is pushed off target on a miss
+    sight: 130, // px
+    attackRange: 100, // px
+    fleeHp: 0.35, // flee below this fraction of max HP
+    replanMs: 800,
+  },
+  medium: {
+    reaction: [200, 350],
+    accuracy: [0.7, 0.8],
+    missAngle: [0.3, 0.5],
+    sight: 170,
+    attackRange: 120,
+    fleeHp: 0.25,
+    replanMs: 500,
+  },
+  hard: {
+    reaction: [120, 200],
+    accuracy: [0.88, 0.95],
+    missAngle: [0.15, 0.25],
+    sight: 220,
+    attackRange: 140,
+    fleeHp: 0.15,
+    replanMs: 300,
+  },
+};
+
 const LOST_TARGET_MS = 2_500; // keep searching this long after losing sight
-const REPLAN_MS = 500; // NavMesh-style re-route interval
-const FLEE_HP = MAX_HP * 0.25;
 
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 const tileOf = (px) => Math.floor(px / TILE);
@@ -24,10 +50,11 @@ const farthestCorner = (from) =>
   }, null);
 
 // State machine: patrol -> search / chase -> attack, with flee when hurt.
-// Each bot gets its own accuracy (70-80%) and reaction time (200-350 ms).
-export class MediumBot {
-  constructor() {
-    this.accuracy = rand(0.7, 0.8);
+// Tuning comes from PROFILES[difficulty]; each bot gets its own accuracy roll.
+export class CpuBot {
+  constructor(difficulty = 'medium') {
+    this.p = PROFILES[difficulty] ?? PROFILES.medium;
+    this.accuracy = rand(...this.p.accuracy);
     this.reset();
   }
 
@@ -42,9 +69,10 @@ export class MediumBot {
     this.lastSeen = null;
   }
 
-  // Writes ctx-free intents onto `me`: dx/dy (unit or zero), aim (unit), fire.
+  // Writes intents onto `me`: dx/dy (unit or zero), aim (unit), fire.
   think(ctx, me, dtMs) {
     const { map, actors, pickups, now } = ctx;
+    const p = this.p;
     me.dx = 0;
     me.dy = 0;
     me.fire = false;
@@ -55,7 +83,7 @@ export class MediumBot {
     for (const a of actors) {
       if (!a.alive || a.team === me.team) continue;
       const d = Math.hypot(a.x - me.x, a.y - me.y);
-      if (d < SIGHT_RANGE && d < seenDist && hasLineOfSight(map, me.x, me.y, a.x, a.y)) {
+      if (d < p.sight && d < seenDist && hasLineOfSight(map, me.x, me.y, a.x, a.y)) {
         seen = a;
         seenDist = d;
       }
@@ -63,7 +91,7 @@ export class MediumBot {
     if (seen) {
       if (this.targetId !== seen.id) {
         this.targetId = seen.id;
-        this.reactionMs = rand(200, 350); // human-like delay before engaging
+        this.reactionMs = rand(...p.reaction); // delay before engaging
       }
       this.reactionMs = Math.max(0, this.reactionMs - dtMs);
       this.lastSeen = { x: seen.x, y: seen.y, at: now };
@@ -73,17 +101,17 @@ export class MediumBot {
 
     // 2. Decide what to do
     const engaged = seen !== null && this.reactionMs <= 0;
-    const lowHp = me.hp < FLEE_HP;
+    const lowHp = me.hp < MAX_HP * p.fleeHp;
     let goal = null;
 
     if (lowHp && pickups.length) {
       this.state = 'flee';
-      const p = nearest(pickups, me);
-      goal = { tx: tileOf(p.x), ty: tileOf(p.y) };
+      const c = nearest(pickups, me);
+      goal = { tx: tileOf(c.x), ty: tileOf(c.y) };
     } else if (lowHp) {
       this.state = 'flee';
       goal = farthestCorner(seen ?? me);
-    } else if (engaged && seenDist <= ATTACK_RANGE) {
+    } else if (engaged && seenDist <= p.attackRange) {
       this.state = 'attack';
     } else if (engaged) {
       this.state = 'chase';
@@ -97,15 +125,14 @@ export class MediumBot {
       goal = this.patrolGoal;
     }
 
-    // 3. Route (re-plan every REPLAN_MS or when the goal changes)
+    // 3. Route (re-plan on an interval or when the goal changes)
     if (goal) {
       const key = `${goal.tx},${goal.ty}`;
       this.replanIn -= dtMs;
       if (key !== this.goalKey || this.replanIn <= 0 || this.path.length === 0) {
-        const me0 = { tx: tileOf(me.x), ty: tileOf(me.y) };
-        this.path = findPath(map, me0.tx, me0.ty, goal.tx, goal.ty) ?? [];
+        this.path = findPath(map, tileOf(me.x), tileOf(me.y), goal.tx, goal.ty) ?? [];
         this.goalKey = key;
-        this.replanIn = REPLAN_MS;
+        this.replanIn = p.replanMs;
       }
     }
 
@@ -124,7 +151,7 @@ export class MediumBot {
       break;
     }
 
-    // 5. Combat: plant and shoot, with a deliberate miss for the other 20-30%
+    // 5. Combat: plant and shoot, with a deliberate miss part of the time
     if (this.state === 'attack' && seen) {
       me.dx = 0;
       me.dy = 0;
@@ -134,7 +161,7 @@ export class MediumBot {
       let ax = dx / d;
       let ay = dy / d;
       if (Math.random() > this.accuracy) {
-        const a = rand(0.3, 0.5) * (Math.random() < 0.5 ? -1 : 1);
+        const a = rand(...p.missAngle) * (Math.random() < 0.5 ? -1 : 1);
         [ax, ay] = [ax * Math.cos(a) - ay * Math.sin(a), ax * Math.sin(a) + ay * Math.cos(a)];
       }
       me.aim = { x: ax, y: ay };

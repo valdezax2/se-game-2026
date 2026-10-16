@@ -9,11 +9,24 @@ export const HUD_H = 16;
 
 export const TICK_HZ = 30;
 
-// Match flow (milliseconds)
-export const COUNTDOWN_MS = 8_000; // matchmaking window once the first human arrives
+// Room and match flow (milliseconds)
+export const COUNTDOWN_MS = 5_000; // after the host starts (or reloads)
 export const MATCH_MS = 180_000;
 export const RESULTS_MS = 10_000;
 export const SCORE_LIMIT = 20;
+export const HOST_GRACE_MS = 5_000; // host offline this long -> host passes to another player
+export const PRESENCE_MS = 30_000; // players offline this long are removed from the room
+
+// Room limits
+export const ROOM_LIMITS = {
+  totalMin: 2,
+  totalMax: 8,
+  nameMax: 24,
+  passwordMin: 4,
+  passwordMax: 32,
+};
+export const MAX_ROOMS = 30;
+export const DIFFICULTIES = ['easy', 'medium', 'hard'];
 
 // Combat
 export const MAX_HP = 100;
@@ -22,11 +35,12 @@ export const RESPAWN_MS = 3_000;
 export const INVULN_MS = 1_500;
 export const FIRE_COOLDOWN_MS = 380;
 export const BULLET_SPEED = 180; // px per second
+export const BULLET_DAMAGE = 20;
+
 // Bullets stop after a set distance, measured in tiles from where they spawn.
 export const BULLET_RANGE_TILES = 4;
 export const LONG_RANGE_TILES = 5; // upgrade range
 export const LONG_RANGE_KILLS = 5; // upgrade applies once a player has MORE than this many kills
-export const BULLET_DAMAGE = 20;
 
 // Lives: after this many deaths a player can no longer respawn this match
 export const MAX_DEATHS = 5;
@@ -42,7 +56,6 @@ export const POWER_MS = 8_000;
 export const RAPID_COOLDOWN_MS = 140; // fire cooldown while Rapid Fire is active
 
 export const PLAYER_HALF = 5; // collision box half-size
-export const MAX_HUMANS_PER_ROOM = 10;
 
 // Teams double as costumes. Index = team id used everywhere.
 export const TEAMS = [
