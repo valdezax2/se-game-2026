@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Character Sheet</title>
+  <style>
+    :root {
+      --bg: #15101f;
+      --panel: #221a2e;
+      --line: #3a2c47;
+      --ink: #efe6c8;
+      --muted: #a89bb8;
+      --accent: #ff8c1a;
+    }
+    @media (prefers-color-scheme: light) {
+      :root:not([data-theme="dark"]) { --bg: #efe6c8; --panel: #fff8e6; --line: #d8cbb0; --ink: #2a1d26; --muted: #6b5d78; }
+    }
+    :root[data-theme="light"] { --bg: #efe6c8; --panel: #fff8e6; --line: #d8cbb0; --ink: #2a1d26; --muted: #6b5d78; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 960px; margin: 0 auto; }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; color: var(--accent); }
+    h2 { font-size: 1.05rem; margin: 28px 0 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+    .sub { color: var(--muted); margin: 0 0 8px; }
+    .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .card {
+      background: var(--panel);
+      border: 2px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+    }
+    .card header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .swatch { width: 14px; height: 14px; border-radius: 3px; border: 2px solid var(--ink); flex: none; }
+    .name { font-weight: 700; }
+    .short { color: var(--muted); font-size: 0.85rem; }
+    .portrait { display: block; margin: 0 auto 10px; image-rendering: pixelated; }
+    .attire { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    .hex { font-family: ui-monospace, Menlo, monospace; font-size: 0.85rem; color: var(--muted); }
+    .anatomy { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+    .anatomy canvas { image-rendering: pixelated; background: #0d0814; border-radius: 4px; }
+    .legend { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; align-items: center; margin: 0; flex: 1; min-width: 200px; }
+    .legend dt { display: flex; align-items: center; gap: 8px; font-family: ui-monospace, Menlo, monospace; }
+    .legend dt i { width: 16px; height: 16px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; }
+    .legend dd { margin: 0; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+    td.num { font-family: ui-monospace, Menlo, monospace; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Character Sheet</h1>
+    <p class="sub">Queens Tech: Cloud 3Lit3S. Every player is the same 16 x 16 body, dressed in their team's costume.</p>
+
+    <h2>Teams</h2>
+    <div class="grid" id="teams"></div>
+
+    <h2>Body anatomy</h2>
+    <div class="card anatomy">
+      <canvas id="body" width="16" height="16" style="width:256px;height:256px"></canvas>
+      <dl class="legend" id="legend"></dl>
+    </div>
+
+    <h2>Stats</h2>
+    <div class="card">
+      <table id="stats"></table>
+    </div>
+  </main>
+
+  <script type="module" src="/js/character-sheet.js"></script>
+</body>
+</html>

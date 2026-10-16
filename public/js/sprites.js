@@ -1,7 +1,7 @@
 import { TEAMS } from '/shared/config.js';
 
 // 8-bit palette. Team clothing colours are added per team in buildPixels().
-const PAL = {
+export const PAL = {
   K: '#1b1024', // outline
   T: '#f4c7a1', // skin
   t: '#d9a07a', // skin shade
@@ -19,7 +19,7 @@ const PAL = {
 
 // One shared body for every costume: same silhouette, face and shoes.
 // P = team colour, S = team shade. Attire is painted on top per team.
-const BODY = [
+export const BODY = [
   '................',
   '....KKKKKKKK....',
   '...KHHHHHHHHK...',
@@ -91,7 +91,7 @@ const shade = (n, f) => {
   return hexOf((r << 16) | (g << 8) | b);
 };
 
-function buildPixels(team) {
+export function buildPixels(team) {
   const color = TEAMS[team].color;
   const c = { ...PAL, P: hexOf(color), S: shade(color, 0.6) };
   const px = BODY.map((row) => [...row].map((ch) => (ch === '.' ? null : (c[ch] ?? null))));
