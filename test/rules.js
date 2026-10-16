@@ -245,4 +245,19 @@ function matchRoom(extra = {}) {
   assert.ok(RAPID_COOLDOWN_MS < FIRE_COOLDOWN_MS);
 }
 
+// 14. A full 8-player room gives every player a different colour; humans keep theirs
+{
+  const room = newRoom({ totalSlots: 8, humanSlots: 8 });
+  room.join(user('a'), '', { owner: true });
+  room.join(user('b'), '');
+  room.join(user('c'), '');
+  const aColor = room.humans.get('a').color;
+  room.startMatch(0);
+  const colors = room.actors.map((a) => a.color);
+  assert.equal(room.actors.length, 8, 'eight players in the match');
+  assert.equal(new Set(colors).size, 8, `all colours distinct, got ${colors}`);
+  assert.ok(colors.every((c) => c >= 0 && c < 8), 'colours are palette indices');
+  assert.equal(room.actors.find((x) => x.id === 'a').color, aColor, 'human keeps their colour');
+}
+
 console.log('room rules tests passed');

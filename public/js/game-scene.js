@@ -1,6 +1,6 @@
-import { TILE, HUD_H, TEAMS } from '/shared/config.js';
-import { makeTextures } from './sprites.js';
-import { sfx } from './audio.js';
+import { TILE, HUD_H, TEAMS, PLAYER_COLORS } from '/shared/config.js';
+import { makeTextures, charKey } from './sprites.js';
+import { sfx, playWin } from './audio.js';
 
 const WALL = 1;
 const CRATE = 2;
@@ -53,9 +53,7 @@ export class GameScene extends Phaser.Scene {
     this.handlers = {
       map: (m) => this.buildMap(m),
       snapshot: (s) => this.applySnapshot(s),
-      'match:end': (r) => {
-        this.lastEnd = r;
-      },
+      'match:end': (r) => this.onMatchEnd(r),
       fx: (fx) => this.onFx(fx),
     };
     const socket = this.net.socket;
@@ -182,7 +180,7 @@ export class GameScene extends Phaser.Scene {
       img.setVisible(Boolean(b));
       if (b) {
         img.setPosition(b.x, b.y + HUD_H);
-        img.setTint(TEAMS[b.team].color);
+        img.setTint(PLAYER_COLORS[b.color]);
       }
     });
 
@@ -191,20 +189,22 @@ export class GameScene extends Phaser.Scene {
 
   makeActorView(a) {
     const root = this.add.container(0, 0).setDepth(10);
+    const glow = this.add.graphics();
     const gun = this.add.graphics();
-    const sprite = this.add.image(0, 0, `char${a.team}`);
+    const sprite = this.add.image(0, 0, charKey(a.team, a.color));
     const hp = this.add.graphics();
+    const crown = this.add.graphics().setVisible(false);
     const tag = this.add
       .text(0, -12, a.name, {
         fontFamily: 'monospace',
         fontSize: '7px',
-        color: a.bot ? '#c9bfe0' : '#ffffff',
+        color: hex(PLAYER_COLORS[a.color]),
         stroke: '#000000',
         strokeThickness: 2,
       })
       .setOrigin(0.5, 1);
-    root.add([gun, sprite, hp, tag]);
-    return { root, sprite, gun, hp, a, moving: false };
+    root.add([glow, gun, sprite, hp, tag, crown]);
+    return { root, sprite, gun, hp, glow, crown, a, moving: false };
   }
 
   makePickup(p) {
@@ -269,6 +269,69 @@ export class GameScene extends Phaser.Scene {
       v.hp.fillRect(-8, 9, 16, 2);
       v.hp.fillStyle(pct > 0.5 ? 0x3ddc84 : pct > 0.25 ? 0xffd23f : 0xe63946, 1);
       v.hp.fillRect(-8, 9, Math.round(16 * pct), 2);
+    }
+
+    this.applyHighlight(v, a, time);
+  }
+
+  // Who stands out after a match: winning team (gold ring + bounce), top killers (crown),
+  // everyone else dimmed. Only active while the results phase is on screen.
+  highlightFor(a) {
+    const s = this.snap;
+    if (!s || s.phase !== 'results' || !this.lastEnd) return null;
+    const top = Math.max(0, ...s.actors.map((x) => x.kills));
+    const winner = this.lastEnd.winner;
+    if (top === 0 && winner < 0) return null; // a 0-0 draw has nobody to celebrate
+    const isTop = top > 0 && a.kills === top;
+    const onWinningTeam = winner >= 0 ? a.team === winner : isTop;
+    return { win: onWinningTeam, mvp: isTop, lose: !onWinningTeam };
+  }
+
+  applyHighlight(v, a, time) {
+    const hl = this.highlightFor(a);
+    v.glow.clear();
+    v.crown.setVisible(Boolean(hl?.mvp));
+    if (!hl) return;
+
+    v.root.alpha = hl.lose ? 0.35 : 1;
+    if (hl.win) {
+      v.sprite.y = -Math.abs(Math.sin(time / 180)) * 4; // bounce
+      v.glow.lineStyle(2, 0xffd23f, 0.5 + 0.5 * Math.sin(time / 150));
+      v.glow.strokeCircle(0, 0, 11 + Math.sin(time / 150) * 1.5);
+    }
+    if (hl.mvp) {
+      v.crown.clear();
+      const bob = Math.sin(time / 200) * 1.5;
+      v.crown.fillStyle(0xffd23f, 1);
+      v.crown.fillRect(-4, -18 + bob, 8, 3);
+      v.crown.fillTriangle(-4, -18 + bob, -4, -24 + bob, -1, -18 + bob);
+      v.crown.fillTriangle(-1, -18 + bob, 0, -25 + bob, 1, -18 + bob);
+      v.crown.fillTriangle(1, -18 + bob, 4, -24 + bob, 4, -18 + bob);
+    }
+  }
+
+  onMatchEnd(r) {
+    this.lastEnd = r;
+    playWin();
+    this.tweens.add({ targets: this.banner, scale: { from: 0.4, to: 1 }, duration: 500, ease: 'Back.easeOut' });
+
+    // Confetti in the winners' colours (or everyone's, on a draw)
+    const winners = this.snap ? this.snap.actors.filter((x) => (r.winner >= 0 ? x.team === r.winner : x.kills > 0)) : [];
+    const colours = winners.length ? winners.map((x) => PLAYER_COLORS[x.color]) : PLAYER_COLORS;
+    for (let i = 0; i < 60; i++) {
+      const x = Phaser.Math.Between(0, 320);
+      const piece = this.add
+        .rectangle(x, -4, 3, 5, Phaser.Utils.Array.GetRandom(colours))
+        .setDepth(300);
+      this.tweens.add({
+        targets: piece,
+        y: 240,
+        x: x + Phaser.Math.Between(-24, 24),
+        angle: Phaser.Math.Between(-180, 180),
+        duration: Phaser.Math.Between(1200, 2200),
+        delay: Phaser.Math.Between(0, 700),
+        onComplete: () => piece.destroy(),
+      });
     }
   }
 

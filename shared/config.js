@@ -57,6 +57,19 @@ export const RAPID_COOLDOWN_MS = 140; // fire cooldown while Rapid Fire is activ
 
 export const PLAYER_HALF = 5; // collision box half-size
 
+// One distinct clothing colour per player slot (8 is the maximum room size).
+// Each player keeps the same colour for the whole time they're in a room.
+export const PLAYER_COLORS = [
+  0xe63946, // red
+  0x3a7bd5, // blue
+  0x3ddc84, // green
+  0xffd23f, // yellow
+  0xb26bff, // purple
+  0xff8c1a, // orange
+  0x3ee8e8, // cyan
+  0xff6fb5, // pink
+];
+
 // Teams double as costumes. Index = team id used everywhere.
 export const TEAMS = [
   { name: 'Vampires', short: 'VAMP', color: 0xe63946 },
