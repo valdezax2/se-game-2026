@@ -1,4 +1,5 @@
 import { GameScene, session } from './game-scene.js';
+import { PLAYER_COLORS } from '/shared/config.js';
 
 const TOKEN_KEY = 'qt-token';
 const PHASE_LABEL = { waiting: 'Open', starting: 'Starting', playing: 'In match', results: 'Results' };
@@ -61,7 +62,8 @@ function syncView() {
     setView('lobby');
     return;
   }
-  const playing = room.phase === 'playing' && latestMap;
+  // Results stay on the arena so the winners can be celebrated; the room screen follows.
+  const playing = (room.phase === 'playing' || room.phase === 'results') && latestMap;
   // Show the right container first: Phaser sizes its canvas from the parent when it starts.
   setView(playing ? 'game' : 'room');
   if (playing && !game) startGame();
@@ -320,7 +322,10 @@ function renderRoom() {
 
   $('#players').replaceChildren(
     ...room.humans.map((h) => {
-      const li = el('li', '', h.name);
+      const li = el('li', '');
+      const swatch = el('span', 'swatch');
+      swatch.style.background = `#${PLAYER_COLORS[h.color].toString(16).padStart(6, '0')}`;
+      li.append(swatch, h.name);
       if (h.id === room.hostId) li.append(' ', el('span', 'badge', 'HOST'));
       if (h.id === me.id) li.append(' ', el('span', 'badge', 'YOU'));
       if (h.inMatch) li.append(' ', el('span', 'badge', 'IN MATCH'));

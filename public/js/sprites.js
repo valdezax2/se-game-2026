@@ -1,4 +1,9 @@
-import { TEAMS } from '/shared/config.js';
+import { TEAMS, PLAYER_COLORS } from '/shared/config.js';
+
+// Texture key for a costume (team) worn in a player's colour.
+export const charKey = (team, color) => `char-${team}-${color}`;
+// Texture key for one pose; the standing pose uses the plain charKey.
+export const poseKey = (team, color, pose) => (pose === 'base' ? charKey(team, color) : `${charKey(team, color)}-${pose}`);
 
 // 8-bit palette. Team clothing colours are added per team in buildPixels().
 export const PAL = {
@@ -91,13 +96,14 @@ const shade = (n, f) => {
   return hexOf((r << 16) | (g << 8) | b);
 };
 
-export const teamPalette = (team) => {
-  const color = TEAMS[team].color;
+// Clothing colour comes from the player's colour slot; the team picks the costume shape.
+const paletteFor = (playerColor) => {
+  const color = PLAYER_COLORS[playerColor];
   return { ...PAL, P: hexOf(color), S: shade(color, 0.6) };
 };
 
-export function buildPixels(team) {
-  const c = teamPalette(team);
+export function buildPixels(team, playerColor) {
+  const c = paletteFor(playerColor);
   const px = BODY.map((row) => [...row].map((ch) => (ch === '.' ? null : (c[ch] ?? null))));
   ATTIRE[team](px, c);
   return px;
@@ -116,9 +122,9 @@ function shiftBlock(px, x0, x1, y0, y1, dx) {
 
 // Poses for one team, all built from the same base sprite so they match the costume:
 // walkA / walkB are the two leg strides, blink closes the eyes, shoot leans back with an arm out.
-export function buildFrames(team) {
-  const c = teamPalette(team);
-  const base = buildPixels(team);
+export function buildFrames(team, playerColor) {
+  const c = paletteFor(playerColor);
+  const base = buildPixels(team, playerColor);
 
   const walkA = shiftBlock(shiftBlock(base, 0, 8, 13, 16, -1), 8, 16, 13, 16, 1); // legs apart
   const walkB = shiftBlock(shiftBlock(base, 0, 8, 13, 16, 1), 8, 16, 13, 16, -1); // legs together
@@ -270,13 +276,17 @@ export function makeTextures(scene) {
     }
   });
 
-  // Per team: char<t>-base (standing), -walkA, -walkB, -blink, -shoot
+  // Every team in every player colour, each with all of its poses
   for (let t = 0; t < TEAMS.length; t++) {
-    const frames = buildFrames(t);
-    for (const [name, px] of Object.entries(frames)) {
-      paint(scene, `char${t}-${name}`, 16, 16, (ctx) => {
-        px.forEach((row, y) => row.forEach((col, x) => col && dot(ctx, x, y, col)));
-      });
-    }
+    for (let c = 0; c < PLAYER_COLORS.length; c++) paintCharacter(scene, t, c);
+  }
+}
+
+function paintCharacter(scene, team, playerColor) {
+  const frames = buildFrames(team, playerColor);
+  for (const [pose, px] of Object.entries(frames)) {
+    paint(scene, poseKey(team, playerColor, pose), 16, 16, (ctx) => {
+      px.forEach((row, y) => row.forEach((col, x) => col && dot(ctx, x, y, col)));
+    });
   }
 }

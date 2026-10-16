@@ -45,11 +45,32 @@ const PICKUP_RADIUS = 10;
 const HIT_RADIUS = 8;
 const FEED_MAX = 4;
 const CRATE_CANDY_CHANCE = 0.35;
+// QT_MATCH_MS shortens matches for testing; the default is the real length.
+const MATCH_LENGTH_MS = Number(process.env.QT_MATCH_MS) || MATCH_MS;
+// Offsets (in tiles, from a team's corner) for team members. Odd-odd and even-odd
+// tiles are always floor, so these never land on a tombstone.
+const SPAWN_STEPS = [
+  [0, 0],
+  [1, 0],
+  [0, 1],
+  [2, 0],
+  [0, 2],
+  [2, 1],
+  [1, 2],
+  [3, 0],
+];
 
 let idSeq = 1;
 const nextId = () => idSeq++;
 
 const teamCountFor = (totalSlots) => clamp(totalSlots, 2, 4);
+
+// Lowest colour index not already in use. Room sizes are capped at 8, so one is always free.
+const freeColor = (taken) => {
+  let c = 0;
+  while (taken.has(c)) c++;
+  return c;
+};
 const fail = (error) => ({ ok: false, error });
 
 function shuffle(arr) {
@@ -82,6 +103,7 @@ export function bulletRangeFor(a) {
 function makeActor(fields) {
   return {
     team: -1,
+    color: 0,
     x: 0,
     y: 0,
     hp: MAX_HP,
@@ -183,6 +205,7 @@ export class Room {
       humans: [...this.humans.values()].map((h) => ({
         id: h.id,
         name: h.name,
+        color: h.color,
         connected: h.connected,
         inMatch: inMatch.has(h.id),
       })),
@@ -205,9 +228,18 @@ export class Room {
     }
     if (this.humans.size >= this.humanSlots) return fail('That room is full.');
 
+    const color = freeColor(new Set([...this.humans.values()].map((h) => h.color)));
     this.humans.set(
       user.id,
-      makeActor({ id: user.id, name: user.name, bot: false, socket: user.socket, connected: true, disconnectedAt: 0 }),
+      makeActor({
+        id: user.id,
+        name: user.name,
+        bot: false,
+        socket: user.socket,
+        connected: true,
+        disconnectedAt: 0,
+        color,
+      }),
     );
     this.hostId ??= user.id;
     user.socket.join(this.channel);
@@ -371,10 +403,18 @@ export class Room {
     this.lastCandy = now;
 
     const cpus = Array.from({ length: cpuCount }, () => this.spawnCpu());
+    // Humans keep their colour; CPUs take the colours left over.
+    const taken = new Set(humans.map((h) => h.color));
+    for (const cpu of cpus) {
+      cpu.color = freeColor(taken);
+      taken.add(cpu.color);
+    }
     this.actors = [...humans, ...cpus];
     // Round-robin over everyone keeps team sizes within one of each other.
+    const perTeam = Array(this.teamCount).fill(0);
     this.actors.forEach((a, i) => {
       a.team = i % this.teamCount;
+      a.slot = perTeam[a.team]++;
       a.kills = 0;
       a.deaths = 0;
       a.out = false;
@@ -382,7 +422,7 @@ export class Room {
     });
 
     this.phase = 'playing';
-    this.phaseEnd = now + MATCH_MS;
+    this.phaseEnd = now + MATCH_LENGTH_MS;
     this.io.to(this.channel).emit('map', this.mapPayload());
     this.io.to(this.channel).emit('fx', { type: 'start' });
     this.emitState();
@@ -409,7 +449,20 @@ export class Room {
   }
 
   // Spawn or respawn. Power-ups are lost on death.
-  place(a, now, spawn = SPAWN_CORNERS[a.team]) {
+  // Team members share a corner, so each gets a nearby free tile (slot 0 is the corner itself).
+  // `corner` lets a respawn pick a different corner than the team's own.
+  spawnTile(team, slot, corner = SPAWN_CORNERS[team]) {
+    const c = corner;
+    const sx = c.tx === 1 ? 1 : -1;
+    const sy = c.ty === 1 ? 1 : -1;
+    const [i, j] = SPAWN_STEPS[slot] ?? [0, 0];
+    const tx = c.tx + sx * i;
+    const ty = c.ty + sy * j;
+    return solidTile(this.map, tx, ty) ? c : { tx, ty };
+  }
+
+  place(a, now, corner = SPAWN_CORNERS[a.team]) {
+    const spawn = this.spawnTile(a.team, a.slot ?? 0, corner);
     a.x = (spawn.tx + 0.5) * TILE;
     a.y = (spawn.ty + 0.5) * TILE;
     a.hp = MAX_HP;
@@ -465,6 +518,7 @@ export class Room {
     for (const s of dirs) {
       this.bullets.push({
         id: nextId(),
+        color: a.color,
         x: a.x + ax * s * 10,
         y: a.y + ay * s * 10,
         vx: ax * s * BULLET_SPEED,
@@ -608,6 +662,7 @@ export class Room {
         id: a.id,
         name: a.name,
         team: a.team,
+        color: a.color,
         bot: a.bot,
         x: Math.round(a.x),
         y: Math.round(a.y),
@@ -625,7 +680,7 @@ export class Room {
         inv: a.invulnUntil > now,
         shooting: now - a.lastFire < SHOOT_ANIM_MS,
       })),
-      bullets: this.bullets.map((b) => ({ x: Math.round(b.x), y: Math.round(b.y), team: b.team })),
+      bullets: this.bullets.map((b) => ({ x: Math.round(b.x), y: Math.round(b.y), team: b.team, color: b.color })),
       pickups: this.pickups.map((p) => ({ id: p.id, kind: p.kind, x: Math.round(p.x), y: Math.round(p.y) })),
       crates: this.crateIndices(),
       scores: this.scores.slice(0, this.teamCount),

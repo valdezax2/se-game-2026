@@ -89,7 +89,8 @@ function renderTeams() {
       <canvas class="portrait" width="16" height="16" style="width:${16 * SCALE_TEAM}px;height:${16 * SCALE_TEAM}px"></canvas>
       <p class="attire">${ATTIRE[i]}</p>`;
     host.appendChild(card);
-    drawPixels(card.querySelector('canvas'), buildPixels(i), SCALE_TEAM);
+    // Players pick their own colour now; show each team in a sample colour (the first four slots match TEAMS).
+    drawPixels(card.querySelector('canvas'), buildPixels(i, i), SCALE_TEAM);
   });
 }
 
@@ -134,7 +135,7 @@ const POSES = [
 function renderPoses() {
   const host = document.getElementById('poses');
   TEAMS.forEach((team, i) => {
-    const frames = buildFrames(i);
+    const frames = buildFrames(i, i);
     const row = document.createElement('div');
     row.className = 'pose-row';
     row.innerHTML = `<div class="name">${team.name}</div>`;
