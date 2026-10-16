@@ -6,7 +6,9 @@ import {
   FIRE_COOLDOWN_MS,
   RAPID_COOLDOWN_MS,
   BULLET_SPEED,
-  BULLET_LIFE_MS,
+  BULLET_RANGE_TILES,
+  LONG_RANGE_TILES,
+  LONG_RANGE_KILLS,
   BULLET_DAMAGE,
   CANDY_HEAL,
   CANDY_MAX,
@@ -62,6 +64,12 @@ export function rollPickupKind(r = Math.random()) {
 // Fire cooldown for an actor right now (Rapid Fire shortens it)
 export function fireCooldownFor(a, now) {
   return a.rapidUntil > now ? RAPID_COOLDOWN_MS : FIRE_COOLDOWN_MS;
+}
+
+// Bullet range in pixels: players with more than LONG_RANGE_KILLS kills get the longer range
+export function bulletRangeFor(a) {
+  const tiles = a.kills > LONG_RANGE_KILLS ? LONG_RANGE_TILES : BULLET_RANGE_TILES;
+  return tiles * TILE;
 }
 
 // Humans and bots share this shape; humans keep their record across matches.
@@ -317,6 +325,7 @@ export class Room {
     a.lastFire = now;
     const { x: ax, y: ay } = a.aim;
     const dirs = a.doubleUntil > now ? [1, -1] : [1];
+    const range = bulletRangeFor(a);
     for (const s of dirs) {
       this.bullets.push({
         id: nextId(),
@@ -324,7 +333,8 @@ export class Room {
         y: a.y + ay * s * 10,
         vx: ax * s * BULLET_SPEED,
         vy: ay * s * BULLET_SPEED,
-        life: BULLET_LIFE_MS,
+        travelled: 0,
+        range,
         team: a.team,
         owner: a,
         dead: false,
@@ -334,10 +344,11 @@ export class Room {
 
   moveBullet(b, dtMs, now) {
     const dt = dtMs / 1000;
+    const step = Math.hypot(b.vx, b.vy) * dt;
     b.x += b.vx * dt;
     b.y += b.vy * dt;
-    b.life -= dtMs;
-    if (b.life <= 0) {
+    b.travelled += step;
+    if (b.travelled >= b.range) {
       b.dead = true;
       return;
     }
@@ -471,6 +482,7 @@ export class Room {
         deaths: a.deaths,
         lives: Math.max(0, MAX_DEATHS - a.deaths),
         out: a.out,
+        longRange: a.kills > LONG_RANGE_KILLS,
         rapid: a.rapidUntil > now,
         double: a.doubleUntil > now,
         inv: a.invulnUntil > now,

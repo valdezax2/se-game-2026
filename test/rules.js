@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { Room, rollPickupKind, fireCooldownFor } from '../server/room.js';
 import { MAX_DEATHS, FIRE_COOLDOWN_MS, RAPID_COOLDOWN_MS, RESPAWN_MS } from '../shared/config.js';
+import { generateArena } from '../server/arena.js';
 
 const io = { to: () => ({ emit() {} }) };
 const fakeSocket = (id) => ({ id, join() {}, leave() {}, emit() {} });
@@ -66,6 +67,45 @@ function newRoom() {
   assert.equal(room.bullets.length, 2, 'two-way shot is two bullets');
   const [fwd, back] = room.bullets;
   assert.ok(fwd.vy > 0 && back.vy < 0, 'one bullet forward, one backward');
+}
+
+// 3b. Bullets stop at 4 tiles; players with more than 5 kills get 5 tiles
+{
+  const room = newRoom();
+  room.join(fakeSocket('c'), 'C');
+  room.startMatch(0);
+  const a = room.actors.find((x) => !x.bot);
+  a.aim = { x: 1, y: 0 };
+
+  // The range each bullet is given depends on the shooter's kills
+  a.kills = 0;
+  room.bullets = [];
+  room.shoot(a, 1);
+  assert.equal(room.bullets[0].range, 4 * 16, 'default range is 4 tiles');
+
+  a.kills = 5;
+  room.bullets = [];
+  room.shoot(a, 1);
+  assert.equal(room.bullets[0].range, 4 * 16, 'exactly 5 kills is not enough');
+
+  a.kills = 6;
+  room.bullets = [];
+  room.shoot(a, 1);
+  assert.equal(room.bullets[0].range, 5 * 16, 'more than 5 kills gives 5 tiles');
+
+  // A bullet is removed once it has travelled its range
+  // Open row 1 of a crate-free arena, so only the range can stop the bullet
+  room.map = generateArena(1, 0);
+  const b = { x: 24, y: 24, vx: 180, vy: 0, travelled: 0, range: 64, team: 0, dead: false };
+  room.bullets = [b];
+  room.actors = [];
+  let ticks = 0;
+  while (!b.dead && ticks < 1000) {
+    room.moveBullet(b, 33, 0);
+    ticks++;
+  }
+  assert.ok(b.dead, 'bullet is removed');
+  assert.ok(Math.abs(b.travelled - 64) < 6, `bullet travelled about 64px, got ${b.travelled}`);
 }
 
 // 4. Rapid Fire shortens the cooldown only while active

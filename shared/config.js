@@ -22,7 +22,10 @@ export const RESPAWN_MS = 3_000;
 export const INVULN_MS = 1_500;
 export const FIRE_COOLDOWN_MS = 380;
 export const BULLET_SPEED = 180; // px per second
-export const BULLET_LIFE_MS = 1_100;
+// Bullets stop after a set distance, measured in tiles from where they spawn.
+export const BULLET_RANGE_TILES = 4;
+export const LONG_RANGE_TILES = 5; // upgrade range
+export const LONG_RANGE_KILLS = 5; // upgrade applies once a player has MORE than this many kills
 export const BULLET_DAMAGE = 20;
 
 // Lives: after this many deaths a player can no longer respawn this match

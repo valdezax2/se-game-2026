@@ -251,7 +251,7 @@ export class GameScene extends Phaser.Scene {
 
     let left = s.phase === 'starting' ? 'GET READY' : 'SPECTATING';
     if (me) {
-      const powers = [me.rapid && 'RAPID', me.double && '2-WAY'].filter(Boolean).join(' ');
+      const powers = [me.longRange && 'LONG', me.rapid && 'RAPID', me.double && '2-WAY'].filter(Boolean).join(' ');
       left = `HP ${Math.max(0, me.hp)} K ${me.kills} L ${me.lives}${powers ? ` ${powers}` : ''}`;
     }
     this.hudLeft.setText(left);
