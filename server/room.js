@@ -393,9 +393,22 @@ export class Room {
     return makeActor({ id: `cpu-${this.cpuSeq}`, name, bot: true, ai: new CpuBot(this.difficulty) });
   }
 
+  // Respawns go to the corner farthest from living enemies, so nobody can camp one spot.
+  // Ties keep the team's own corner.
+  safestCorner(a) {
+    const own = SPAWN_CORNERS[a.team];
+    const enemies = this.actors.filter((e) => e.alive && e.team !== a.team);
+    if (!enemies.length) return own;
+    const gap = (c) => {
+      const cx = (c.tx + 0.5) * TILE;
+      const cy = (c.ty + 0.5) * TILE;
+      return Math.min(...enemies.map((e) => Math.hypot(e.x - cx, e.y - cy)));
+    };
+    return SPAWN_CORNERS.reduce((best, c) => (gap(c) > gap(best) ? c : best), own);
+  }
+
   // Spawn or respawn. Power-ups are lost on death.
-  place(a, now) {
-    const spawn = SPAWN_CORNERS[a.team];
+  place(a, now, spawn = SPAWN_CORNERS[a.team]) {
     a.x = (spawn.tx + 0.5) * TILE;
     a.y = (spawn.ty + 0.5) * TILE;
     a.hp = MAX_HP;
@@ -418,7 +431,7 @@ export class Room {
 
     for (const a of this.actors) {
       if (!a.alive) {
-        if (!a.out && now >= a.respawnAt) this.place(a, now);
+        if (!a.out && now >= a.respawnAt) this.place(a, now, this.safestCorner(a));
         continue;
       }
 

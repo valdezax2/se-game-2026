@@ -245,4 +245,38 @@ function matchRoom(extra = {}) {
   assert.ok(RAPID_COOLDOWN_MS < FIRE_COOLDOWN_MS);
 }
 
+// 14. Respawns avoid camping: the corner farthest from living enemies is chosen
+{
+  const room = matchRoom();
+  const a = room.actors.find((x) => !x.bot); // team 0, spawns at (1,1)
+  const bot = room.actors.find((x) => x.bot); // team 1, spawns at the far corner
+  bot.x = (1 + 0.5) * 16; // enemy now sits on a's corner
+  bot.y = (1 + 0.5) * 16;
+  const spot = room.safestCorner(a);
+  assert.deepEqual(spot, { tx: 18, ty: 11 }, 'respawn moves away from the enemy');
+
+  bot.x = (18 + 0.5) * 16; // enemy back at the far corner: keep the own corner
+  bot.y = (11 + 0.5) * 16;
+  assert.deepEqual(room.safestCorner(a), { tx: 1, ty: 1 }, 'own corner kept when it is already safest');
+
+  bot.alive = false;
+  assert.deepEqual(room.safestCorner(a), { tx: 1, ty: 1 }, 'no living enemies: own corner');
+}
+
+// 15. CPUs detour for a nearby pickup while patrolling
+{
+  const room = matchRoom();
+  room.map = generateArena(1, 0);
+  const bot = room.actors.find((x) => x.bot);
+  bot.team = 0;
+  bot.x = 3 * 16 + 8;
+  bot.y = 3 * 16 + 8;
+  room.actors = [bot];
+  room.pickups = [{ id: 1, kind: 'rapid', x: 5 * 16 + 8, y: 3 * 16 + 8 }];
+  bot.ai.reset();
+  bot.ai.think({ map: room.map, actors: room.actors, pickups: room.pickups, now: 0 }, bot, 33);
+  assert.equal(bot.ai.state, 'patrol', 'still patrolling');
+  assert.ok(bot.dx > 0.9 && Math.abs(bot.dy) < 0.1, `heads for the pickup, got dx=${bot.dx} dy=${bot.dy}`);
+}
+
 console.log('room rules tests passed');

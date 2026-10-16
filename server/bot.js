@@ -33,6 +33,7 @@ export const PROFILES = {
 };
 
 const LOST_TARGET_MS = 2_500; // keep searching this long after losing sight
+const LOOT_PX = 112; // patrolling CPUs detour for a pickup this close
 
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 const tileOf = (px) => Math.floor(px / TILE);
@@ -121,8 +122,14 @@ export class CpuBot {
       goal = { tx: tileOf(this.lastSeen.x), ty: tileOf(this.lastSeen.y) };
     } else {
       this.state = 'patrol';
-      if (!this.patrolGoal || this.path.length === 0) this.patrolGoal = randomFloorTile(map);
-      goal = this.patrolGoal;
+      // Detour for a pickup that is close by, otherwise keep wandering
+      const loot = pickups.length ? nearest(pickups, me) : null;
+      if (loot && Math.hypot(loot.x - me.x, loot.y - me.y) < LOOT_PX) {
+        goal = { tx: tileOf(loot.x), ty: tileOf(loot.y) };
+      } else {
+        if (!this.patrolGoal || this.path.length === 0) this.patrolGoal = randomFloorTile(map);
+        goal = this.patrolGoal;
+      }
     }
 
     // 3. Route (re-plan on an interval or when the goal changes)

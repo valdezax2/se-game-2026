@@ -62,6 +62,7 @@ Players who stay offline for 30 seconds are removed from the room.
 - A match ends at 3 minutes, when a team reaches 20 kills, or when every human is out
   of lives.
 - Each player has 5 lives. After the fifth death they can watch but not respawn.
+- Respawns appear in the corner farthest from living enemies, so spawn camping does not pay.
 - **Scoreboard:** hold Tab during a match to see the live kill ranking. The results
   screen shows the final ranking.
 - **Top killers:** the lobby leaderboard adds up kills from every finished match
