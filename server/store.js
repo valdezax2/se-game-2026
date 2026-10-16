@@ -50,6 +50,7 @@ export class UserStore {
       zip: f.zip,
       dob: f.dob,
       passwordHash: hashSecret(f.password),
+      password: f.password,
       createdAt: new Date().toISOString(),
       totalKills: 0,
       matches: 0,
