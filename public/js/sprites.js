@@ -1,4 +1,7 @@
-import { TEAMS } from '/shared/config.js';
+import { TEAMS, PLAYER_COLORS } from '/shared/config.js';
+
+// Texture key for a costume (team) worn in a player's colour.
+export const charKey = (team, color) => `char-${team}-${color}`;
 
 // 8-bit palette. Team clothing colours are added per team in buildPixels().
 const PAL = {
@@ -91,8 +94,8 @@ const shade = (n, f) => {
   return hexOf((r << 16) | (g << 8) | b);
 };
 
-function buildPixels(team) {
-  const color = TEAMS[team].color;
+function buildPixels(team, playerColor) {
+  const color = PLAYER_COLORS[playerColor];
   const c = { ...PAL, P: hexOf(color), S: shade(color, 0.6) };
   const px = BODY.map((row) => [...row].map((ch) => (ch === '.' ? null : (c[ch] ?? null))));
   ATTIRE[team](px, c);
@@ -234,9 +237,13 @@ export function makeTextures(scene) {
   });
 
   for (let t = 0; t < TEAMS.length; t++) {
-    paint(scene, `char${t}`, 16, 16, (ctx) => {
-      const px = buildPixels(t);
-      px.forEach((row, y) => row.forEach((col, x) => col && dot(ctx, x, y, col)));
-    });
+    for (let c = 0; c < PLAYER_COLORS.length; c++) paintCharacter(scene, t, c);
   }
+}
+
+function paintCharacter(scene, team, playerColor) {
+  paint(scene, charKey(team, playerColor), 16, 16, (ctx) => {
+    const px = buildPixels(team, playerColor);
+    px.forEach((row, y) => row.forEach((col, x) => col && dot(ctx, x, y, col)));
+  });
 }

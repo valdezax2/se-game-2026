@@ -1,4 +1,5 @@
 import { GameScene, session } from './game-scene.js';
+import { PLAYER_COLORS } from '/shared/config.js';
 
 const TOKEN_KEY = 'qt-token';
 const PHASE_LABEL = { waiting: 'Open', starting: 'Starting', playing: 'In match', results: 'Results' };
@@ -320,7 +321,10 @@ function renderRoom() {
 
   $('#players').replaceChildren(
     ...room.humans.map((h) => {
-      const li = el('li', '', h.name);
+      const li = el('li', '');
+      const swatch = el('span', 'swatch');
+      swatch.style.background = `#${PLAYER_COLORS[h.color].toString(16).padStart(6, '0')}`;
+      li.append(swatch, h.name);
       if (h.id === room.hostId) li.append(' ', el('span', 'badge', 'HOST'));
       if (h.id === me.id) li.append(' ', el('span', 'badge', 'YOU'));
       if (h.inMatch) li.append(' ', el('span', 'badge', 'IN MATCH'));

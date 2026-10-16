@@ -1,5 +1,5 @@
-import { TILE, HUD_H, TEAMS } from '/shared/config.js';
-import { makeTextures } from './sprites.js';
+import { TILE, HUD_H, TEAMS, PLAYER_COLORS } from '/shared/config.js';
+import { makeTextures, charKey } from './sprites.js';
 import { sfx } from './audio.js';
 
 const WALL = 1;
@@ -182,7 +182,7 @@ export class GameScene extends Phaser.Scene {
       img.setVisible(Boolean(b));
       if (b) {
         img.setPosition(b.x, b.y + HUD_H);
-        img.setTint(TEAMS[b.team].color);
+        img.setTint(PLAYER_COLORS[b.color]);
       }
     });
 
@@ -192,13 +192,13 @@ export class GameScene extends Phaser.Scene {
   makeActorView(a) {
     const root = this.add.container(0, 0).setDepth(10);
     const gun = this.add.graphics();
-    const sprite = this.add.image(0, 0, `char${a.team}`);
+    const sprite = this.add.image(0, 0, charKey(a.team, a.color));
     const hp = this.add.graphics();
     const tag = this.add
       .text(0, -12, a.name, {
         fontFamily: 'monospace',
         fontSize: '7px',
-        color: a.bot ? '#c9bfe0' : '#ffffff',
+        color: hex(PLAYER_COLORS[a.color]),
         stroke: '#000000',
         strokeThickness: 2,
       })
