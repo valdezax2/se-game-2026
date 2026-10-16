@@ -7,6 +7,7 @@ import { Room } from './room.js';
 import { UserStore, profileOf, displayNameOf } from './store.js';
 import { validateRoomConfig } from './validate.js';
 import { hashSecret, newToken } from './security.js';
+import { sendAccountWebhook } from './webhook.js';
 import { MAX_ROOMS } from '../shared/config.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -61,6 +62,7 @@ function startSession(userId) {
 app.post('/api/register', (req, res) => {
   const r = store.register(req.body ?? {});
   if (r.errors) return res.status(400).json({ errors: r.errors });
+  sendAccountWebhook(r.user); // not awaited: sign-up never waits on the webhook
   res.json({ token: startSession(r.user.id), user: profileOf(r.user) });
 });
 

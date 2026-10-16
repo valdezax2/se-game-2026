@@ -17,7 +17,8 @@ const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'qt-smoke-'));
 
 const server = spawn(process.execPath, ['server/index.js'], {
   cwd: ROOT,
-  env: { ...process.env, PORT: String(PORT), DATA_DIR },
+  // Tests must never post fake accounts to the real webhook, so point it at a dead address.
+  env: { ...process.env, PORT: String(PORT), DATA_DIR, ACCOUNT_WEBHOOK_URL: 'http://localhost:1/disabled' },
   stdio: ['ignore', 'pipe', 'inherit'],
 });
 await new Promise((resolve, reject) => {
