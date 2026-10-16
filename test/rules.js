@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { Room, rollPickupKind, fireCooldownFor } from '../server/room.js';
 import { PROFILES } from '../server/bot.js';
-import { generateArena } from '../server/arena.js';
+import { generateArena, moveBox } from '../server/arena.js';
 import {
   MAX_DEATHS,
   FIRE_COOLDOWN_MS,
@@ -277,6 +277,16 @@ function matchRoom(extra = {}) {
   bot.ai.think({ map: room.map, actors: room.actors, pickups: room.pickups, now: 0 }, bot, 33);
   assert.equal(bot.ai.state, 'patrol', 'still patrolling');
   assert.ok(bot.dx > 0.9 && Math.abs(bot.dy) < 0.1, `heads for the pickup, got dx=${bot.dx} dy=${bot.dy}`);
+}
+
+// 16. Walking straight on does not snag on pillar corners, even off the lane centre
+{
+  const map = generateArena(1, 0);
+  for (const y of [56, 50, 51.5, 62]) {
+    const e = { x: 24, y };
+    for (let i = 0; i < 400; i++) moveBox(map, e, 1, 0);
+    assert.ok(e.x > 290, `walks the full lane from y=${y}, stopped at x=${e.x}`);
+  }
 }
 
 console.log('room rules tests passed');

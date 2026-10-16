@@ -84,10 +84,35 @@ function boxBlocked(map, x, y) {
   );
 }
 
+// Corner assist: a box that catches a pillar corner slides toward the centre of the nearest
+// open lane, so walking straight on works without lining up by hand. Pillars sit on even
+// tiles, so open lanes run through odd tile rows and columns.
+const ASSIST_PX = TILE / 2;
+const laneCentre = (v) => (2 * Math.floor(v / (2 * TILE)) + 1.5) * TILE;
+
+function assist(map, ent, dx, dy) {
+  if (dx) {
+    const off = laneCentre(ent.y) - ent.y;
+    const step = Math.sign(off) * Math.min(Math.abs(off), Math.abs(dx));
+    if (Math.abs(off) <= ASSIST_PX && !boxBlocked(map, ent.x, ent.y + step)) ent.y += step;
+  }
+  if (dy) {
+    const off = laneCentre(ent.x) - ent.x;
+    const step = Math.sign(off) * Math.min(Math.abs(off), Math.abs(dy));
+    if (Math.abs(off) <= ASSIST_PX && !boxBlocked(map, ent.x + step, ent.y)) ent.x += step;
+  }
+}
+
 // Moves an entity's centre by (dx, dy), one axis at a time so it slides along walls.
 export function moveBox(map, ent, dx, dy) {
-  if (dx && !boxBlocked(map, ent.x + dx, ent.y)) ent.x += dx;
-  if (dy && !boxBlocked(map, ent.x, ent.y + dy)) ent.y += dy;
+  if (dx) {
+    if (!boxBlocked(map, ent.x + dx, ent.y)) ent.x += dx;
+    else assist(map, ent, dx, 0);
+  }
+  if (dy) {
+    if (!boxBlocked(map, ent.x, ent.y + dy)) ent.y += dy;
+    else assist(map, ent, 0, dy);
+  }
 }
 
 export function hasLineOfSight(map, x1, y1, x2, y2) {
