@@ -4,12 +4,16 @@ import {
   MAX_HP,
   MOVE_SPEED,
   FIRE_COOLDOWN_MS,
+  RAPID_COOLDOWN_MS,
   BULLET_SPEED,
   BULLET_LIFE_MS,
   BULLET_DAMAGE,
   CANDY_HEAL,
   CANDY_MAX,
   CANDY_SPAWN_MS,
+  POWER_CHANCE,
+  POWER_MS,
+  MAX_DEATHS,
   RESPAWN_MS,
   INVULN_MS,
   MATCH_MS,
@@ -48,6 +52,18 @@ function shuffle(arr) {
   return arr;
 }
 
+// Which pickup a spawn becomes. Rapid Fire and Two-Way are rare; the rest is candy.
+export function rollPickupKind(r = Math.random()) {
+  if (r < POWER_CHANCE) return 'rapid';
+  if (r < POWER_CHANCE * 2) return 'double';
+  return 'candy';
+}
+
+// Fire cooldown for an actor right now (Rapid Fire shortens it)
+export function fireCooldownFor(a, now) {
+  return a.rapidUntil > now ? RAPID_COOLDOWN_MS : FIRE_COOLDOWN_MS;
+}
+
 // Humans and bots share this shape; humans keep their record across matches.
 function makeActor(fields) {
   return {
@@ -58,11 +74,14 @@ function makeActor(fields) {
     alive: false,
     kills: 0,
     deaths: 0,
+    out: false, // true once deaths reaches MAX_DEATHS: no more respawns this match
     aim: { x: 1, y: 0 },
     dx: 0,
     dy: 0,
     fire: false,
     lastFire: 0,
+    rapidUntil: 0,
+    doubleUntil: 0,
     respawnAt: 0,
     invulnUntil: 0,
     ai: null,
@@ -160,10 +179,15 @@ export class Room {
       case 'starting':
         if (now >= this.phaseEnd) this.startMatch(now);
         break;
-      case 'playing':
+      case 'playing': {
         this.step(now, dtMs);
-        if (now >= this.phaseEnd || Math.max(...this.scores) >= SCORE_LIMIT) this.endMatch(now);
+        // The match is over when no human can still act: all are out of lives.
+        const humanCanAct = this.actors.some((a) => !a.bot && (a.alive || !a.out));
+        if (!humanCanAct || now >= this.phaseEnd || Math.max(...this.scores) >= SCORE_LIMIT) {
+          this.endMatch(now);
+        }
         break;
+      }
       case 'results':
         if (now >= this.phaseEnd) {
           this.reset();
@@ -223,6 +247,7 @@ export class Room {
     for (const a of this.actors) {
       a.kills = 0;
       a.deaths = 0;
+      a.out = false;
       this.place(a, now);
     }
 
@@ -238,6 +263,7 @@ export class Room {
     return makeActor({ id: `bot-${this.botSeq}`, name, bot: true, team, ai: new MediumBot() });
   }
 
+  // Spawn or respawn. Power-ups are lost on death.
   place(a, now) {
     const spawn = SPAWN_CORNERS[a.team];
     a.x = (spawn.tx + 0.5) * TILE;
@@ -248,6 +274,8 @@ export class Room {
     a.dy = 0;
     a.fire = false;
     a.aim = { x: 1, y: 0 };
+    a.rapidUntil = 0;
+    a.doubleUntil = 0;
     a.invulnUntil = now + INVULN_MS;
     if (a.ai) a.ai.reset();
   }
@@ -260,7 +288,7 @@ export class Room {
 
     for (const a of this.actors) {
       if (!a.alive) {
-        if (now >= a.respawnAt) this.place(a, now);
+        if (!a.out && now >= a.respawnAt) this.place(a, now);
         continue;
       }
 
@@ -271,33 +299,37 @@ export class Room {
         if (!a.bot) a.aim = { x: a.dx / len, y: a.dy / len };
       }
 
-      if (a.fire && now - a.lastFire >= FIRE_COOLDOWN_MS) this.shoot(a, now);
-      this.collectCandy(a);
+      if (a.fire && now - a.lastFire >= fireCooldownFor(a, now)) this.shoot(a, now);
+      this.collectPickups(a, now);
     }
 
     if (now - this.lastCandy >= CANDY_SPAWN_MS && this.pickups.length < CANDY_MAX) {
       this.lastCandy = now;
-      this.spawnCandy(randomFloorTile(this.map));
+      this.spawnPickup(randomFloorTile(this.map));
     }
 
     for (const b of this.bullets) this.moveBullet(b, dtMs, now);
     this.bullets = this.bullets.filter((b) => !b.dead);
   }
 
+  // Two-Way power-up fires both forward and backward.
   shoot(a, now) {
     a.lastFire = now;
     const { x: ax, y: ay } = a.aim;
-    this.bullets.push({
-      id: nextId(),
-      x: a.x + ax * 10,
-      y: a.y + ay * 10,
-      vx: ax * BULLET_SPEED,
-      vy: ay * BULLET_SPEED,
-      life: BULLET_LIFE_MS,
-      team: a.team,
-      owner: a,
-      dead: false,
-    });
+    const dirs = a.doubleUntil > now ? [1, -1] : [1];
+    for (const s of dirs) {
+      this.bullets.push({
+        id: nextId(),
+        x: a.x + ax * s * 10,
+        y: a.y + ay * s * 10,
+        vx: ax * s * BULLET_SPEED,
+        vy: ay * s * BULLET_SPEED,
+        life: BULLET_LIFE_MS,
+        team: a.team,
+        owner: a,
+        dead: false,
+      });
+    }
   }
 
   moveBullet(b, dtMs, now) {
@@ -316,7 +348,7 @@ export class Room {
       const idx = ty * this.map.cols + tx;
       if (this.map.tiles[idx] === CRATE) {
         this.map.tiles[idx] = FLOOR;
-        if (Math.random() < CRATE_CANDY_CHANCE) this.spawnCandy({ tx, ty });
+        if (Math.random() < CRATE_CANDY_CHANCE) this.spawnPickup({ tx, ty });
       }
       b.dead = true;
       return;
@@ -332,19 +364,25 @@ export class Room {
     }
   }
 
-  spawnCandy(tile) {
+  spawnPickup(tile) {
     if (this.pickups.length >= CANDY_MAX + 2) return;
-    this.pickups.push({ id: nextId(), x: (tile.tx + 0.5) * TILE, y: (tile.ty + 0.5) * TILE });
+    this.pickups.push({
+      id: nextId(),
+      kind: rollPickupKind(),
+      x: (tile.tx + 0.5) * TILE,
+      y: (tile.ty + 0.5) * TILE,
+    });
   }
 
-  collectCandy(a) {
+  collectPickups(a, now) {
     for (let i = this.pickups.length - 1; i >= 0; i--) {
       const p = this.pickups[i];
-      if (Math.hypot(a.x - p.x, a.y - p.y) < PICKUP_RADIUS) {
-        a.hp = Math.min(MAX_HP, a.hp + CANDY_HEAL);
-        this.pickups.splice(i, 1);
-        this.io.to(this.channel).emit('fx', { type: 'pickup' });
-      }
+      if (Math.hypot(a.x - p.x, a.y - p.y) >= PICKUP_RADIUS) continue;
+      if (p.kind === 'rapid') a.rapidUntil = now + POWER_MS;
+      else if (p.kind === 'double') a.doubleUntil = now + POWER_MS;
+      else a.hp = Math.min(MAX_HP, a.hp + CANDY_HEAL);
+      this.pickups.splice(i, 1);
+      this.io.to(this.channel).emit('fx', { type: 'pickup', kind: p.kind });
     }
   }
 
@@ -358,13 +396,15 @@ export class Room {
     victim.hp = 0;
     victim.alive = false;
     victim.deaths += 1;
+    victim.out = victim.deaths >= MAX_DEATHS;
     victim.respawnAt = now + RESPAWN_MS;
     if (killer && killer !== victim) {
       killer.kills += 1;
       this.scores[killer.team] += 1;
     }
     this.feed.push(`${killer ? killer.name : 'Ghost'} > ${victim.name}`);
-    if (this.feed.length > FEED_MAX) this.feed.shift();
+    if (victim.out) this.feed.push(`${victim.name} is OUT of lives`);
+    while (this.feed.length > FEED_MAX) this.feed.shift();
     this.io.to(this.channel).emit('fx', { type: 'kill' });
   }
 
@@ -429,10 +469,14 @@ export class Room {
         ay: r2(a.aim.y),
         kills: a.kills,
         deaths: a.deaths,
+        lives: Math.max(0, MAX_DEATHS - a.deaths),
+        out: a.out,
+        rapid: a.rapidUntil > now,
+        double: a.doubleUntil > now,
         inv: a.invulnUntil > now,
       })),
       bullets: this.bullets.map((b) => ({ x: Math.round(b.x), y: Math.round(b.y), team: b.team })),
-      pickups: this.pickups.map((p) => ({ id: p.id, x: Math.round(p.x), y: Math.round(p.y) })),
+      pickups: this.pickups.map((p) => ({ id: p.id, kind: p.kind, x: Math.round(p.x), y: Math.round(p.y) })),
       crates: this.crateIndices(),
       scores: this.scores.slice(0, this.teamCount),
       feed: this.feed,

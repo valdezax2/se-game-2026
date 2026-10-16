@@ -211,6 +211,18 @@ export function makeTextures(scene) {
     });
   });
 
+  // Rapid Fire: orange lightning bolt (8x8)
+  paint(scene, 'power-rapid', 8, 8, (ctx) => {
+    const rows = ['...YYY..', '..YYY...', '.YYY....', '.YYYYYY.', '....YYY.', '...YYY..', '..YYY...', '..Y.....'];
+    drawGrid(ctx, rows, { Y: '#ffd23f' });
+  });
+
+  // Two-Way: purple double arrow (8x8)
+  paint(scene, 'power-double', 8, 8, (ctx) => {
+    const rows = ['........', '.P..P...', 'PPPPPPPP', 'PPPPPPPP', 'PPPPPPPP', '.P..P...', '........', '........'];
+    drawGrid(ctx, rows, { P: '#b26bff' });
+  });
+
   // Candy bullet (4x4, tinted per team)
   paint(scene, 'bullet', 4, 4, (ctx) => {
     for (let y = 0; y < 4; y++) {

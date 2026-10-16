@@ -199,7 +199,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   makePickup(p) {
-    const img = this.add.image(p.x, p.y + HUD_H, 'candy').setDepth(5);
+    const texture = p.kind === 'rapid' ? 'power-rapid' : p.kind === 'double' ? 'power-double' : 'candy';
+    const img = this.add.image(p.x, p.y + HUD_H, texture).setDepth(5);
     this.tweens.add({ targets: img, y: img.y - 2, duration: 500, yoyo: true, repeat: -1 });
     return img;
   }
@@ -248,9 +249,12 @@ export class GameScene extends Phaser.Scene {
   updateHud(s) {
     const me = s.actors.find((a) => a.id === this.myId);
 
-    this.hudLeft.setText(
-      me ? `HP ${Math.max(0, me.hp)} K ${me.kills} D ${me.deaths}` : s.phase === 'starting' ? 'GET READY' : 'SPECTATING',
-    );
+    let left = s.phase === 'starting' ? 'GET READY' : 'SPECTATING';
+    if (me) {
+      const powers = [me.rapid && 'RAPID', me.double && '2-WAY'].filter(Boolean).join(' ');
+      left = `HP ${Math.max(0, me.hp)} K ${me.kills} L ${me.lives}${powers ? ` ${powers}` : ''}`;
+    }
+    this.hudLeft.setText(left);
 
     const slot = (i) => 96 + i * 44;
     this.hudTeams.forEach((txt, i) => {
@@ -275,7 +279,8 @@ export class GameScene extends Phaser.Scene {
 
     let text = '';
     if (s.phase === 'starting') text = `MATCH STARTS IN ${Math.ceil(s.left / 1000)}\nbots fill the empty slots`;
-    else if (s.phase === 'playing' && me && !me.alive) text = "YOU'RE DOWN...\nrespawning";
+    else if (s.phase === 'playing' && me && me.out) text = 'OUT OF LIVES\nwatching the rest of the match';
+    else if (s.phase === 'playing' && me && !me.alive) text = `YOU'RE DOWN...\nrespawning (${me.lives} lives left)`;
     else if (s.phase === 'results' && this.lastEnd) text = this.resultText(this.lastEnd);
     else if (s.phase === 'waiting') text = 'Waiting for players...';
     this.banner.setText(text).setVisible(text.length > 0);

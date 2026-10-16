@@ -25,10 +25,18 @@ export const BULLET_SPEED = 180; // px per second
 export const BULLET_LIFE_MS = 1_100;
 export const BULLET_DAMAGE = 20;
 
+// Lives: after this many deaths a player can no longer respawn this match
+export const MAX_DEATHS = 5;
+
 // Candy (health pickups)
 export const CANDY_HEAL = 30;
 export const CANDY_MAX = 4;
 export const CANDY_SPAWN_MS = 8_000;
+
+// Rare power-ups. Each spawn rolls for one of these, otherwise it is candy.
+export const POWER_CHANCE = 0.06; // per kind
+export const POWER_MS = 8_000;
+export const RAPID_COOLDOWN_MS = 140; // fire cooldown while Rapid Fire is active
 
 export const PLAYER_HALF = 5; // collision box half-size
 export const MAX_HUMANS_PER_ROOM = 10;
