@@ -44,6 +44,8 @@ const PICKUP_RADIUS = 10;
 const HIT_RADIUS = 8;
 const FEED_MAX = 4;
 const CRATE_CANDY_CHANCE = 0.35;
+// QT_MATCH_MS shortens matches for testing; the default is the real length.
+const MATCH_LENGTH_MS = Number(process.env.QT_MATCH_MS) || MATCH_MS;
 // Offsets (in tiles, from a team's corner) for team members. Odd-odd and even-odd
 // tiles are always floor, so these never land on a tombstone.
 const SPAWN_STEPS = [
@@ -419,7 +421,7 @@ export class Room {
     });
 
     this.phase = 'playing';
-    this.phaseEnd = now + MATCH_MS;
+    this.phaseEnd = now + MATCH_LENGTH_MS;
     this.io.to(this.channel).emit('map', this.mapPayload());
     this.io.to(this.channel).emit('fx', { type: 'start' });
     this.emitState();

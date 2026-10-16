@@ -62,7 +62,8 @@ function syncView() {
     setView('lobby');
     return;
   }
-  const playing = room.phase === 'playing' && latestMap;
+  // Results stay on the arena so the winners can be celebrated; the room screen follows.
+  const playing = (room.phase === 'playing' || room.phase === 'results') && latestMap;
   // Show the right container first: Phaser sizes its canvas from the parent when it starts.
   setView(playing ? 'game' : 'room');
   if (playing && !game) startGame();

@@ -33,3 +33,8 @@ export function sfx(name) {
   const s = SFX[name];
   if (s) tone(...s);
 }
+
+// Short rising fanfare for the end of a match
+export function playWin() {
+  [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => tone(f, f, 0.18, 'triangle', 0.06), i * 130));
+}
